@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a2e1a" />
+  <meta name="description" content="GB Shop Manager - Retail Management System" />
+  <title>GB Shop Manager</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ============================
+       TOAST NOTIFICATION
+  ============================= -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- ============================
+       LOGIN SCREEN
+  ============================= -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-icon">🛍️</div>
+        <h1>GB Shop Manager</h1>
+        <p>Bag & Retail Management System</p>
+      </div>
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" placeholder="you@example.com" required />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter your password" required />
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
+          <span class="btn-text">Sign In</span>
+          <span class="btn-loader hidden">⏳</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================
+       MAIN APP
+  ============================= -->
+  <div id="app" class="app hidden">
+
+    <!-- SIDEBAR -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">🛍️</div>
+        <div class="sidebar-title">
+          <span class="brand">GB Shop</span>
+          <span class="sub">Manager</span>
+        </div>
+        <button class="sidebar-close" onclick="closeSidebar()">✕</button>
+      </div>
+
+      <ul class="nav-menu">
+        <li><a href="#" class="nav-link active" onclick="showSection('dashboard', this)">
+          <span class="nav-icon">📊</span> Dashboard
+        </a></li>
+        <li><a href="#" class="nav-link" onclick="showSection('products', this)">
+          <span class="nav-icon">📦</span> Products
+        </a></li>
+        <li><a href="#" class="nav-link" onclick="showSection('sales', this)">
+          <span class="nav-icon">🛒</span> Record Sale
+        </a></li>
+        <li><a href="#" class="nav-link" onclick="showSection('customers', this)">
+          <span class="nav-icon">👥</span> Customers
+        </a></li>
+        <li><a href="#" class="nav-link" onclick="showSection('reports', this)">
+          <span class="nav-icon">📈</span> Reports
+        </a></li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="user-info" id="userInfo"></div>
+        <button class="btn btn-logout" onclick="handleLogout()">🚪 Sign Out</button>
+      </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <button class="menu-btn" onclick="openSidebar()">☰</button>
+        <h2 class="page-title" id="pageTitle">Dashboard</h2>
+        <div class="topbar-right">
+          <span class="time-badge" id="timeBadge"></span>
+        </div>
+      </header>
+
+      <!-- LOW STOCK ALERT BANNER -->
+      <div id="lowStockBanner" class="alert-banner hidden">
+        ⚠️ <span id="lowStockMessage"></span>
+      </div>
+
+      <!-- ========================
+           DASHBOARD SECTION
+      ========================= -->
+      <section id="sectionDashboard" class="section active">
+        <div class="section-header">
+          <h2>Today's Overview</h2>
+          <button class="btn btn-sm btn-outline" onclick="loadDashboard()">🔄 Refresh</button>
+        </div>
+
+        <!-- Stat Cards -->
+        <div class="stats-grid">
+          <div class="stat-card green">
+            <div class="stat-icon">💰</div>
+            <div class="stat-info">
+              <span class="stat-label">Sales Today</span>
+              <span class="stat-value" id="statSalesToday">KSh 0</span>
+            </div>
+          </div>
+          <div class="stat-card teal">
+            <div class="stat-icon">📈</div>
+            <div class="stat-info">
+              <span class="stat-label">Profit Today</span>
+              <span class="stat-value" id="statProfitToday">KSh 0</span>
+            </div>
+          </div>
+          <div class="stat-card dark">
+            <div class="stat-icon">📦</div>
+            <div class="stat-info">
+              <span class="stat-label">Total Products</span>
+              <span class="stat-value" id="statProducts">0</span>
+            </div>
+          </div>
+          <div class="stat-card warning">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-info">
+              <span class="stat-label">Low Stock Items</span>
+              <span class="stat-value" id="statLowStock">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Low Stock Alert List -->
+        <div class="card mt-2" id="lowStockCard">
+          <div class="card-header">
+            <h3>⚠️ Low Stock Alerts</h3>
+          </div>
+          <div id="lowStockList" class="low-stock-list">
+            <p class="empty-state">✅ All products are well stocked!</p>
+          </div>
+        </div>
+
+        <!-- Recent Sales -->
+        <div class="card mt-2">
+          <div class="card-header">
+            <h3>🕒 Recent Sales</h3>
+            <button class="btn btn-sm btn-outline" onclick="showSection('reports', document.querySelector('[onclick*=reports]'))">View All</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Product</th><th>Qty</th><th>Total</th><th>Profit</th><th>Time</th></tr>
+              </thead>
+              <tbody id="recentSalesBody">
+                <tr><td colspan="5" class="empty-state">No sales yet today</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- WhatsApp Report -->
+        <div class="card mt-2 whatsapp-card">
+          <div class="card-header">
+            <h3>📱 WhatsApp Daily Report</h3>
+          </div>
+          <p class="helper-text">Send today's summary directly to WhatsApp</p>
+          <button class="btn btn-whatsapp" onclick="sendWhatsAppReport()">
+            <span>📲 Send Report to WhatsApp</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================
+           PRODUCTS SECTION
+      ========================= -->
+      <section id="sectionProducts" class="section">
+        <div class="section-header">
+          <h2>Products</h2>
+          <button class="btn btn-primary" onclick="openProductModal()">+ Add Product</button>
+        </div>
+
+        <!-- Search bar -->
+        <div class="search-bar">
+          <input type="text" id="productSearch" placeholder="🔍 Search products..." oninput="filterProducts()" />
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Buy Price</th>
+                  <th>Sell Price</th>
+                  <th>Stock</th>
+                  <th>Margin</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="productsBody">
+                <tr><td colspan="6" class="empty-state">Loading products...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================
+           SALES SECTION
+      ========================= -->
+      <section id="sectionSales" class="section">
+        <div class="section-header">
+          <h2>Record a Sale</h2>
+        </div>
+
+        <div class="card sale-card">
+          <form id="saleForm" onsubmit="handleRecordSale(event)">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Select Product *</label>
+                <select id="saleProduct" required onchange="updateSalePreview()">
+                  <option value="">-- Choose a product --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Quantity *</label>
+                <input type="number" id="saleQty" min="1" value="1" required oninput="updateSalePreview()" />
+              </div>
+              <div class="form-group">
+                <label>Customer (Optional)</label>
+                <select id="saleCustomer">
+                  <option value="">-- Walk-in Customer --</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Sale Preview -->
+            <div class="sale-preview" id="salePreview">
+              <div class="preview-row">
+                <span>Unit Price:</span>
+                <strong id="previewUnitPrice">KSh 0</strong>
+              </div>
+              <div class="preview-row">
+                <span>Quantity:</span>
+                <strong id="previewQty">0</strong>
+              </div>
+              <div class="preview-row highlight">
+                <span>Total Amount:</span>
+                <strong id="previewTotal">KSh 0</strong>
+              </div>
+              <div class="preview-row profit">
+                <span>Profit:</span>
+                <strong id="previewProfit">KSh 0</strong>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full" id="saleBtn">
+              ✅ Record Sale
+            </button>
+          </form>
+        </div>
+
+        <!-- Today's Sales Table -->
+        <div class="card mt-2">
+          <div class="card-header">
+            <h3>📋 Today's Sales Log</h3>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Product</th><th>Customer</th><th>Qty</th><th>Total</th><th>Profit</th><th>Time</th></tr>
+              </thead>
+              <tbody id="todaySalesBody">
+                <tr><td colspan="6" class="empty-state">No sales recorded today</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================
+           CUSTOMERS SECTION
+      ========================= -->
+      <section id="sectionCustomers" class="section">
+        <div class="section-header">
+          <h2>Customers</h2>
+          <button class="btn btn-primary" onclick="openCustomerModal()">+ Add Customer</button>
+        </div>
+
+        <div class="search-bar">
+          <input type="text" id="customerSearch" placeholder="🔍 Search customers..." oninput="filterCustomers()" />
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>#</th><th>Name</th><th>Phone</th><th>Joined</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="customersBody">
+                <tr><td colspan="5" class="empty-state">No customers yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================
+           REPORTS SECTION
+      ========================= -->
+      <section id="sectionReports" class="section">
+        <div class="section-header">
+          <h2>Reports</h2>
+          <div class="report-tabs">
+            <button class="tab-btn active" onclick="switchReport('daily', this)">Daily</button>
+            <button class="tab-btn" onclick="switchReport('monthly', this)">Monthly</button>
+          </div>
+        </div>
+
+        <!-- Report Controls -->
+        <div class="card report-controls">
+          <div id="dailyControls" class="report-control">
+            <div class="form-group">
+              <label>Select Date</label>
+              <input type="date" id="reportDate" onchange="loadDailyReport()" />
+            </div>
+          </div>
+          <div id="monthlyControls" class="report-control hidden">
+            <div class="form-inline">
+              <div class="form-group">
+                <label>Month</label>
+                <select id="reportMonth">
+                  <option value="1">January</option><option value="2">February</option>
+                  <option value="3">March</option><option value="4">April</option>
+                  <option value="5">May</option><option value="6">June</option>
+                  <option value="7">July</option><option value="8">August</option>
+                  <option value="9">September</option><option value="10">October</option>
+                  <option value="11">November</option><option value="12">December</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Year</label>
+                <input type="number" id="reportYear" value="2025" min="2020" max="2030" />
+              </div>
+              <button class="btn btn-primary" onclick="loadMonthlyReport()">Generate</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Report Stats -->
+        <div class="stats-grid" id="reportStats">
+          <div class="stat-card green">
+            <div class="stat-icon">💰</div>
+            <div class="stat-info">
+              <span class="stat-label">Total Sales</span>
+              <span class="stat-value" id="rptTotalSales">KSh 0</span>
+            </div>
+          </div>
+          <div class="stat-card teal">
+            <div class="stat-icon">📈</div>
+            <div class="stat-info">
+              <span class="stat-label">Total Profit</span>
+              <span class="stat-value" id="rptTotalProfit">KSh 0</span>
+            </div>
+          </div>
+          <div class="stat-card dark">
+            <div class="stat-icon">🛒</div>
+            <div class="stat-info">
+              <span class="stat-label">Transactions</span>
+              <span class="stat-value" id="rptTransactions">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Report Table -->
+        <div class="card mt-2">
+          <div class="card-header">
+            <h3 id="reportTableTitle">Sales Report</h3>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Product</th><th>Customer</th><th>Qty</th><th>Total</th><th>Profit</th><th>Date/Time</th></tr>
+              </thead>
+              <tbody id="reportBody">
+                <tr><td colspan="6" class="empty-state">Select a date to view report</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- WhatsApp Report -->
+        <div class="card mt-2 whatsapp-card">
+          <div class="card-header">
+            <h3>📱 Send Report via WhatsApp</h3>
+          </div>
+          <button class="btn btn-whatsapp" onclick="sendWhatsAppReport()">
+            📲 Send Daily Report to WhatsApp
+          </button>
+        </div>
+      </section>
+
+    </div><!-- end main-content -->
+  </div><!-- end app -->
+
+  <!-- ============================
+       PRODUCT MODAL
+  ============================= -->
+  <div id="productModal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeProductModal()"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="productModalTitle">Add New Product</h3>
+        <button class="modal-close" onclick="closeProductModal()">✕</button>
+      </div>
+      <form id="productForm" onsubmit="handleSaveProduct(event)">
+        <input type="hidden" id="productId" />
+        <div class="form-group">
+          <label>Product Name *</label>
+          <input type="text" id="productName" placeholder="e.g. Ladies Tote Bag - Black" required />
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Buying Price (KSh) *</label>
+            <input type="number" id="productBuyPrice" placeholder="0.00" min="0" step="0.01" required />
+          </div>
+          <div class="form-group">
+            <label>Selling Price (KSh) *</label>
+            <input type="number" id="productSellPrice" placeholder="0.00" min="0" step="0.01" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Stock Quantity *</label>
+          <input type="number" id="productStock" placeholder="0" min="0" required />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" onclick="closeProductModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">💾 Save Product</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================
+       CUSTOMER MODAL
+  ============================= -->
+  <div id="customerModal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeCustomerModal()"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="customerModalTitle">Add New Customer</h3>
+        <button class="modal-close" onclick="closeCustomerModal()">✕</button>
+      </div>
+      <form id="customerForm" onsubmit="handleSaveCustomer(event)">
+        <input type="hidden" id="customerId" />
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" id="customerName" placeholder="e.g. Jane Wanjiru" required />
+        </div>
+        <div class="form-group">
+          <label>Phone Number *</label>
+          <input type="tel" id="customerPhone" placeholder="e.g. 0712 345 678" required />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" onclick="closeCustomerModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">💾 Save Customer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Overlay for sidebar on mobile -->
+  <div id="sidebarOverlay" class="sidebar-overlay hidden" onclick="closeSidebar()"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
