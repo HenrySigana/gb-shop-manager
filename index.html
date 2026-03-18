@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#1a2e1a" />
   <meta name="description" content="GB Shop Manager - Retail Management System" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GB Shop" />
+  <meta name="application-name" content="GB Shop Manager" />
+  <meta name="msapplication-TileColor" content="#1a2e1a" />
   <title>GB Shop Manager</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
   <link rel="stylesheet" href="style.css" />
   <!-- Supabase CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -502,5 +511,16 @@
   <div id="sidebarOverlay" class="sidebar-overlay hidden" onclick="closeSidebar()"></div>
 
   <script src="script.js"></script>
+
+  <!-- PWA Service Worker Registration -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js")
+          .then(reg => console.log("✅ SW registered:", reg.scope))
+          .catch(err => console.log("SW error:", err));
+      });
+    }
+  </script>
 </body>
 </html>
