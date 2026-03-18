@@ -266,3 +266,100 @@ ul{list-style:none}
   .form-inline .btn{width:100%;justify-content:center}
   .user-select-grid{grid-template-columns:1fr 1fr}
 }
+
+/* ====================================================
+   LOCK SCREEN
+==================================================== */
+.lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: linear-gradient(135deg, var(--green-deep) 0%, var(--green-mid) 60%, var(--green-bright) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.lock-card {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 2rem 1.75rem 1.5rem;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  animation: fadeUp 0.35s ease;
+}
+
+.lock-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.08); }
+}
+
+.lock-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--green-deep);
+  margin-bottom: 0.25rem;
+}
+.lock-subtitle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+.lock-user {
+  display: inline-block;
+  background: var(--green-light);
+  color: var(--green-mid);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 0.75rem;
+}
+.lock-logout-hint {
+  color: var(--text-light);
+  font-size: 11.5px;
+  margin-top: 0.5rem;
+}
+
+/* Lock button in topbar */
+.lock-btn {
+  background: var(--green-light);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  color: var(--green-mid);
+  margin-left: 6px;
+}
+.lock-btn:hover {
+  background: var(--green-mid);
+  color: #fff;
+  border-color: var(--green-mid);
+  transform: scale(1.05);
+}
+
+/* Auto-lock idle indicator */
+.idle-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--green-bright);
+  transition: width linear;
+  z-index: 200;
+}
