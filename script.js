@@ -16,7 +16,7 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 // ============================================================
 const USERS = [
   { id: 'owner',   name: 'Owner',     role: 'Admin',   pin: '7526', avatar: '👑' },
-  { id: 'staff1',  name: 'Staff',     role: 'Cashier', pin: '7526', avatar: '👤' },
+  { id: 'staff1',  name: 'Staff',     role: 'Cashier', pin: '1234', avatar: '👤' },
 ];
 
 // ============================================================
@@ -1229,3 +1229,126 @@ document.addEventListener('DOMContentLoaded', () => {
   buildUserSelect();
   checkSession();
 });
+
+// ============================================================
+// 🔒 LOCK SCREEN
+// Auto-locks after 5 minutes of inactivity
+// ============================================================
+
+let lockPin        = '';
+let idleTimer      = null;
+const IDLE_MINUTES = 5; // Auto-lock after 5 mins of inactivity
+
+/** Lock the app immediately */
+function lockApp() {
+  lockPin = '';
+  updateLockDots('');
+  document.getElementById('lockPinError').classList.add('hidden');
+  document.getElementById('lockUserName').textContent =
+    `${currentUser?.avatar || '👤'} ${currentUser?.name || 'User'}`;
+  document.getElementById('lockScreen').classList.remove('hidden');
+  sessionStorage.setItem('gb_locked', '1');
+  clearIdleTimer();
+}
+
+/** Unlock the app */
+function unlockApp() {
+  document.getElementById('lockScreen').classList.add('hidden');
+  sessionStorage.removeItem('gb_locked');
+  lockPin = '';
+  updateLockDots('');
+  resetIdleTimer();
+  showToast('🔓 Unlocked!', 'success');
+}
+
+/** Add digit to lock PIN */
+function addLockPin(digit) {
+  if (lockPin.length >= 4) return;
+  lockPin += digit;
+  updateLockDots(lockPin);
+  if (lockPin.length === 4) {
+    setTimeout(checkLockPin, 150);
+  }
+}
+
+/** Clear last digit from lock PIN */
+function clearLockPin() {
+  lockPin = lockPin.slice(0, -1);
+  updateLockDots(lockPin);
+  document.getElementById('lockPinError').classList.add('hidden');
+}
+
+/** Check lock PIN */
+function checkLockPin() {
+  if (!currentUser) return;
+  // Find user in USERS array and check PIN
+  const user = USERS.find(u => u.id === currentUser.id);
+  const correctPin = user ? user.pin : '7526';
+
+  if (lockPin === correctPin) {
+    unlockApp();
+  } else {
+    document.getElementById('lockPinError').classList.remove('hidden');
+    lockPin = '';
+    updateLockDots('');
+    // Shake animation
+    const dots = document.getElementById('lockPinDots');
+    dots.style.animation = 'none';
+    void dots.offsetWidth;
+    dots.style.animation = 'shake 0.4s ease';
+  }
+}
+
+/** Update lock screen pin dots */
+function updateLockDots(val) {
+  document.querySelectorAll('#lockPinDots span').forEach((d, i) => {
+    d.classList.toggle('filled', i < val.length);
+  });
+}
+
+/** Reset the idle auto-lock timer */
+function resetIdleTimer() {
+  clearIdleTimer();
+  idleTimer = setTimeout(() => {
+    if (currentUser && !document.getElementById('lockScreen').classList.contains('hidden') === false) {
+      lockApp();
+      showToast('🔒 Auto-locked due to inactivity', 'warning');
+    }
+  }, IDLE_MINUTES * 60 * 1000);
+}
+
+function clearIdleTimer() {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+}
+
+/** Listen for user activity to reset idle timer */
+function startIdleWatcher() {
+  ['click', 'keydown', 'mousemove', 'touchstart', 'scroll'].forEach(evt => {
+    document.addEventListener(evt, resetIdleTimer, { passive: true });
+  });
+  resetIdleTimer();
+}
+
+// Override showApp to start idle watcher and check lock state
+const _origShowApp = showApp;
+// Patch: after app shows, start idle watcher and check if was locked
+document.addEventListener('DOMContentLoaded', () => {
+  // Check if app was locked before page reload
+  if (sessionStorage.getItem('gb_locked') === '1' && sessionStorage.getItem('gb_user')) {
+    // Re-show app but immediately lock it
+    const saved = sessionStorage.getItem('gb_user');
+    if (saved) {
+      try { currentUser = JSON.parse(saved); } catch(e) {}
+    }
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    lockApp();
+  }
+});
+
+// Start idle watcher when app loads
+const _origInitApp = initApp;
+async function initApp() {
+  await _origInitApp();
+  startIdleWatcher();
+}
