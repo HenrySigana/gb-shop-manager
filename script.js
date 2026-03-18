@@ -51,43 +51,77 @@ function showToast(message, type = 'success') {
 // 🔐 AUTHENTICATION
 // ============================================================
 
-/** Handle login form submit */
-async function handleLogin(e) {
-  e.preventDefault();
-  const email    = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  const btn      = document.getElementById('loginBtn');
+// ---- PIN Configuration ----
+const CORRECT_PIN = '7526';
 
-  btn.disabled = true;
-  btn.querySelector('.btn-text').textContent = 'Signing in...';
-
-  const { data, error } = await db.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    showToast('❌ ' + error.message, 'error');
-    btn.disabled = false;
-    btn.querySelector('.btn-text').textContent = 'Sign In';
-    return;
+/** Add a digit to the PIN input */
+function addPin(digit) {
+  const input = document.getElementById('pin');
+  if (input.value.length < 4) {
+    input.value += digit;
+    updatePinDots(input.value);
+    // Auto-submit when 4 digits entered
+    if (input.value.length === 4) {
+      setTimeout(() => document.getElementById('loginForm').dispatchEvent(new Event('submit')), 150);
+    }
   }
+}
 
-  currentUser = data.user;
-  showApp();
+/** Clear last digit from PIN */
+function clearPin() {
+  const input = document.getElementById('pin');
+  input.value = input.value.slice(0, -1);
+  updatePinDots(input.value);
+  document.getElementById('pinError').classList.add('hidden');
+}
+
+/** Update the dot indicators */
+function updatePinDots(value) {
+  const dots = document.querySelectorAll('.pin-dots span');
+  dots.forEach((dot, i) => {
+    dot.classList.toggle('filled', i < value.length);
+  });
+}
+
+/** Handle PIN login */
+function handleLogin(e) {
+  e.preventDefault();
+  const pin = document.getElementById('pin').value;
+  const errEl = document.getElementById('pinError');
+
+  if (pin === CORRECT_PIN) {
+    errEl.classList.add('hidden');
+    currentUser = { email: 'owner@gbshop.local' };
+    // Store session in sessionStorage so refresh doesn't log out
+    sessionStorage.setItem('gb_logged_in', '1');
+    showApp();
+  } else {
+    errEl.classList.remove('hidden');
+    document.getElementById('pin').value = '';
+    updatePinDots('');
+    // Shake the dots
+    const dots = document.getElementById('pinDots');
+    dots.style.animation = 'none';
+    void dots.offsetWidth;
+    dots.style.animation = 'shake 0.4s ease';
+  }
 }
 
 /** Handle logout */
-async function handleLogout() {
-  await db.auth.signOut();
+function handleLogout() {
   currentUser = null;
+  sessionStorage.removeItem('gb_logged_in');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('pin').value = '';
+  updatePinDots('');
   showToast('Signed out successfully', 'success');
 }
 
 /** Check existing session on page load */
-async function checkSession() {
-  const { data: { session } } = await db.auth.getSession();
-  if (session) {
-    currentUser = session.user;
+function checkSession() {
+  if (sessionStorage.getItem('gb_logged_in') === '1') {
+    currentUser = { email: 'owner@gbshop.local' };
     showApp();
   }
 }
@@ -96,7 +130,7 @@ async function checkSession() {
 function showApp() {
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  document.getElementById('userInfo').textContent = currentUser.email;
+  document.getElementById('userInfo').textContent = '👤 Shop Owner';
   startClock();
   initApp();
 }
