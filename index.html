@@ -91,6 +91,7 @@
       <h2 class="page-title" id="pageTitle">Dashboard</h2>
       <div class="topbar-right">
         <span class="time-badge" id="timeBadge"></span>
+        <button class="lock-btn" onclick="lockApp()" title="Lock Screen">🔒</button>
       </div>
     </header>
 
@@ -573,6 +574,36 @@
 </div>
 
 <div id="sidebarOverlay" class="sidebar-overlay hidden" onclick="closeSidebar()"></div>
+
+
+<!-- ===================== LOCK SCREEN ===================== -->
+<div id="lockScreen" class="lock-screen hidden">
+  <div class="lock-card">
+    <div class="lock-icon">🔒</div>
+    <h2 class="lock-title">Screen Locked</h2>
+    <p class="lock-subtitle">Enter your PIN to unlock</p>
+    <div class="lock-user" id="lockUserName"></div>
+    <div class="pin-dots" id="lockPinDots">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="pin-pad">
+      <button type="button" class="pin-key" onclick="addLockPin('1')">1</button>
+      <button type="button" class="pin-key" onclick="addLockPin('2')">2</button>
+      <button type="button" class="pin-key" onclick="addLockPin('3')">3</button>
+      <button type="button" class="pin-key" onclick="addLockPin('4')">4</button>
+      <button type="button" class="pin-key" onclick="addLockPin('5')">5</button>
+      <button type="button" class="pin-key" onclick="addLockPin('6')">6</button>
+      <button type="button" class="pin-key" onclick="addLockPin('7')">7</button>
+      <button type="button" class="pin-key" onclick="addLockPin('8')">8</button>
+      <button type="button" class="pin-key" onclick="addLockPin('9')">9</button>
+      <button type="button" class="pin-key pin-key-clear" onclick="clearLockPin()">⌫</button>
+      <button type="button" class="pin-key" onclick="addLockPin('0')">0</button>
+      <button type="button" class="pin-key pin-key-back" onclick="handleLogout()">🚪</button>
+    </div>
+    <div id="lockPinError" class="pin-error hidden">❌ Wrong PIN. Try again.</div>
+    <p class="lock-logout-hint">Press 🚪 to sign out completely</p>
+  </div>
+</div>
 
 <script src="script.js"></script>
 <script>
