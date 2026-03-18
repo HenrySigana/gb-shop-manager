@@ -6,8 +6,8 @@
 // ============================================================
 // 🔧 CONFIGURATION — REPLACE WITH YOUR SUPABASE CREDENTIALS
 // ============================================================
-const SUPABASE_URL  = 'https://YOUR_PROJECT_ID.supabase.co';  // ← Replace this
-const SUPABASE_ANON = 'YOUR_ANON_KEY_HERE';                   // ← Replace this
+const SUPABASE_URL  = 'https://ycrhedxrapspfbszlydc.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljcmhlZHhyYXBzcGZic3pseWRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4MTY2NTYsImV4cCI6MjA4OTM5MjY1Nn0.aQvRzk9p-L8IZar2-bVM2XlYFpu6DhT4fWqIW-ZOteA';
 // ============================================================
 
 // Initialize Supabase client
