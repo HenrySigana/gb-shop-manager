@@ -16,7 +16,7 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 // ============================================================
 const USERS = [
   { id: 'owner',   name: 'Owner',     role: 'Admin',   pin: '7526', avatar: '👑' },
-  { id: 'staff1',  name: 'Staff',     role: 'Cashier', pin: '1234', avatar: '👤' },
+  { id: 'staff1',  name: 'Staff',     role: 'Cashier', pin: '7526', avatar: '👤' },
 ];
 
 // ============================================================
