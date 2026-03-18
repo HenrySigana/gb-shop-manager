@@ -31,17 +31,32 @@
       </div>
       <form id="loginForm" onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label for="email">Email Address</label>
-          <input type="email" id="email" placeholder="you@example.com" required />
+          <label for="pin" style="text-align:center;display:block;font-size:15px;">Enter PIN</label>
+          <div class="pin-dots" id="pinDots">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <input type="password" id="pin" inputmode="numeric" maxlength="4"
+            placeholder="••••" autocomplete="off" required
+            oninput="updatePinDots(this.value)" style="text-align:center;font-size:2rem;letter-spacing:12px;" />
         </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" placeholder="Enter your password" required />
+
+        <!-- PIN Pad -->
+        <div class="pin-pad">
+          <button type="button" class="pin-key" onclick="addPin('1')">1</button>
+          <button type="button" class="pin-key" onclick="addPin('2')">2</button>
+          <button type="button" class="pin-key" onclick="addPin('3')">3</button>
+          <button type="button" class="pin-key" onclick="addPin('4')">4</button>
+          <button type="button" class="pin-key" onclick="addPin('5')">5</button>
+          <button type="button" class="pin-key" onclick="addPin('6')">6</button>
+          <button type="button" class="pin-key" onclick="addPin('7')">7</button>
+          <button type="button" class="pin-key" onclick="addPin('8')">8</button>
+          <button type="button" class="pin-key" onclick="addPin('9')">9</button>
+          <button type="button" class="pin-key pin-key-clear" onclick="clearPin()">⌫</button>
+          <button type="button" class="pin-key" onclick="addPin('0')">0</button>
+          <button type="submit" class="pin-key pin-key-enter" id="loginBtn">✓</button>
         </div>
-        <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
-          <span class="btn-text">Sign In</span>
-          <span class="btn-loader hidden">⏳</span>
-        </button>
+
+        <div id="pinError" class="pin-error hidden">❌ Wrong PIN. Try again.</div>
       </form>
     </div>
   </div>
