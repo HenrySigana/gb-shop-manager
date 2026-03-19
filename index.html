@@ -193,9 +193,9 @@
       <div class="card sale-card">
         <form id="saleForm" onsubmit="handleRecordSale(event)">
           <div class="form-grid">
-            <div class="form-group">
-              <label>Select Product *</label>
-              <select id="saleProduct" required onchange="updateSalePreview()">
+           <div class="form-group">
+<label>Select Product * <button type="button" class="btn btn-sm btn-outline" style="margin-left:8px;padding:3px 10px;font-size:11px" onclick="openBarcodeScanner()">📷 Scan</button></label>
+<select id="saleProduct" required onchange="updateSalePreview()">
                 <option value="">-- Choose a product --</option>
               </select>
             </div>
