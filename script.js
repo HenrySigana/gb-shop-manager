@@ -555,24 +555,24 @@ function updateSalePreview() {
   document.getElementById('previewTotal').textContent     = `KSh ${fmt(total)}`;
   document.getElementById('previewProfit').textContent    = `KSh ${fmt(profit)}`;
 }
-
-
 async function handleRecordSale(e) {
   e.preventDefault();
-  const productId  = document.getElementById('saleProduct').value;
-  const customerId = document.getElementById('saleCustomer').value || null;
-  const qty        = parseInt(document.getElementById('saleQty').value);
-  const discount   = parseFloat(document.getElementById('saleDiscount').value) || 0;
-  const payment    = document.getElementById('salePayment').value;
-  const mpesaRef   = document.getElementById('mpesaRef').value.trim() || null;
+  const productId   = document.getElementById('saleProduct').value;
+  const customerId  = document.getElementById('saleCustomer').value || null;
+  const qty         = parseInt(document.getElementById('saleQty').value);
+  const discount    = parseFloat(document.getElementById('saleDiscount').value) || 0;
+  const customPrice = parseFloat(document.getElementById('saleCustomPrice')?.value) || 0;
+  const payment     = document.getElementById('salePayment').value;
+  const mpesaRef    = document.getElementById('mpesaRef').value.trim() || null;
 
   if (!productId) { showToast('Please select a product', 'warning'); return; }
   const product = allProducts.find(p => p.id === productId);
   if (!product) return;
   if (qty > product.stock) { showToast(`⚠️ Only ${product.stock} in stock!`, 'warning'); return; }
 
-  const totalPrice = Math.max(0, product.selling_price * qty - discount);
-  const profit     = Math.max(0, (product.selling_price - product.buying_price) * qty - discount);
+  const sellPrice  = customPrice > 0 ? customPrice : product.selling_price;
+  const totalPrice = Math.max(0, sellPrice * qty - discount);
+  const profit     = Math.max(0, (sellPrice - product.buying_price) * qty - discount);
 
   const btn = document.getElementById('saleBtn');
   btn.disabled = true; btn.textContent = '⏳ Processing...';
@@ -595,19 +595,20 @@ async function handleRecordSale(e) {
     }]);
   }
 
-  lastSaleData = { sale: saleData, product, qty, discount, totalPrice, profit, payment, mpesaRef, customerId };
+  lastSaleData = { sale: saleData, product, qty, discount, totalPrice, profit, payment, mpesaRef, customerId, sellPrice };
   showToast(`✅ Sale recorded! KSh ${fmt(totalPrice)}`, 'success');
 
   btn.disabled = false; btn.textContent = '✅ Record Sale';
   document.getElementById('saleForm').reset();
   document.getElementById('saleDiscount').value = '0';
+  const cp = document.getElementById('saleCustomPrice');
+  if (cp) cp.value = '';
   updateSalePreview();
 
   await loadProducts();
   populateSaleDropdowns();
   loadTodaySales();
 
-  // Low stock alert after sale
   const newStock = product.stock - qty;
   const reorderLevel = product.reorder_level || LOW_STOCK_THRESHOLD;
   if (newStock <= reorderLevel) {
@@ -618,26 +619,7 @@ async function handleRecordSale(e) {
   showReceipt(lastSaleData);
 }
 
-async function loadTodaySales() {
-  const today = todayStr();
-  const { data } = await db.from('sales')
-    .select('*, products(name), customers(name)')
-    .gte('created_at', today + 'T00:00:00')
-    .lte('created_at', today + 'T23:59:59')
-    .order('created_at', { ascending: false });
 
-  const tbody = document.getElementById('todaySalesBody');
-  if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No sales today</td></tr>'; return; }
-  tbody.innerHTML = data.map(s => `<tr>
-    <td>${escHtml(s.products?.name || '?')}</td>
-    <td>${escHtml(s.customers?.name || 'Walk-in')}</td>
-    <td class="mono">${s.quantity}</td>
-    <td class="mono">${s.discount > 0 ? 'KSh ' + fmt(s.discount) : '—'}</td>
-    <td class="mono">KSh ${fmt(s.total_price)}</td>
-    <td><span class="pay-${(s.payment_method||'cash').toLowerCase().replace('-','')}">${s.payment_method || 'Cash'}</span></td>
-    <td><button class="btn btn-sm btn-outline" onclick="viewReceiptById('${s.id}')">🧾</button></td>
-  </tr>`).join('');
-}
 
 // ============================================================
 // 🧾 RECEIPTS
