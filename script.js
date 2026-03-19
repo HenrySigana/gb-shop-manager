@@ -1352,3 +1352,255 @@ async function initApp() {
   await _origInitApp();
   startIdleWatcher();
 }
+// ============================================================
+// 🔔 GROUP 1: STOCK & INVENTORY FEATURES
+// Low Stock Sound Alerts, Reorder Levels, Barcode Scanner,
+// Enhanced Profit Margin Tracking
+// ============================================================
+
+// ---- Low Stock Sound Alert ----
+const LOW_STOCK_THRESHOLD = 3; // Alert when stock falls below this
+
+function playLowStockSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+    oscillator.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
+    gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.5);
+  } catch(e) { /* audio not supported */ }
+}
+
+function checkAndAlertLowStock(product) {
+  const reorderLevel = product.reorder_level || LOW_STOCK_THRESHOLD;
+  if (product.stock <= reorderLevel && product.stock > 0) {
+    playLowStockSound();
+    showToast(`⚠️ Low stock: ${product.name} — only ${product.stock} left!`, 'warning');
+  } else if (product.stock === 0) {
+    playLowStockSound();
+    playLowStockSound(); // double beep for out of stock
+    showToast(`🚨 OUT OF STOCK: ${product.name}!`, 'error');
+  }
+}
+
+// Enhanced low stock banner with reorder levels
+function updateLowStockBannerEnhanced() {
+  const low = allProducts.filter(p => p.stock <= (p.reorder_level || LOW_STOCK_THRESHOLD));
+  const outOfStock = low.filter(p => p.stock === 0);
+  const banner = document.getElementById('lowStockBanner');
+  if (low.length > 0) {
+    const msg = outOfStock.length > 0
+      ? `🚨 OUT OF STOCK: ${outOfStock.map(p => p.name).join(', ')} | ⚠️ Low: ${low.filter(p => p.stock > 0).map(p => `${p.name} (${p.stock})`).join(', ')}`
+      : `⚠️ Low stock: ${low.map(p => `${p.name} (${p.stock})`).join(', ')}`;
+    document.getElementById('lowStockMessage').textContent = msg;
+    banner.classList.remove('hidden');
+    if (outOfStock.length > 0) banner.style.background = 'linear-gradient(135deg,#7f1d1d,#991b1b)';
+    else banner.style.background = '';
+  } else {
+    banner.classList.add('hidden');
+    banner.style.background = '';
+  }
+}
+
+// Override the old updateLowStockBanner with enhanced version
+updateLowStockBanner = updateLowStockBannerEnhanced;
+
+
+// ---- Reorder Level Support ----
+// This patches handleSaveProduct to save reorder_level from the new field
+const _origHandleSaveProduct = handleSaveProduct;
+async function handleSaveProduct(e) {
+  e.preventDefault();
+  const id = document.getElementById('productId').value;
+  const buyPrice  = parseFloat(document.getElementById('productBuyPrice').value);
+  const sellPrice = parseFloat(document.getElementById('productSellPrice').value);
+  if (sellPrice < buyPrice) { showToast('⚠️ Selling price < buying price!', 'warning'); return; }
+
+  const reorderEl = document.getElementById('productReorderLevel');
+  const reorderLevel = reorderEl ? parseInt(reorderEl.value) || 3 : 3;
+
+  const payload = {
+    name:          document.getElementById('productName').value.trim(),
+    product_code:  document.getElementById('productCode').value.trim() || null,
+    buying_price:  buyPrice,
+    selling_price: sellPrice,
+    stock:         parseInt(document.getElementById('productStock').value),
+    category_id:   document.getElementById('productCategory').value || null,
+    supplier_id:   document.getElementById('productSupplier').value || null,
+    reorder_level: reorderLevel,
+  };
+  let error;
+  if (id) { ({ error } = await db.from('products').update(payload).eq('id', id)); }
+  else    { ({ error } = await db.from('products').insert([payload])); }
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  showToast(id ? '✅ Product updated!' : '✅ Product added!', 'success');
+  closeProductModal();
+  await loadProducts();
+  populateSaleDropdowns();
+  updateLowStockBanner();
+}
+
+// Patch openEditProduct to fill reorder level
+const _origOpenEditProduct = openEditProduct;
+function openEditProduct(id) {
+  _origOpenEditProduct(id);
+  const p = allProducts.find(x => x.id === id);
+  const el = document.getElementById('productReorderLevel');
+  if (p && el) el.value = p.reorder_level || 3;
+}
+
+// Patch openProductModal to reset reorder level
+const _origOpenProductModal = openProductModal;
+function openProductModal() {
+  _origOpenProductModal();
+  const el = document.getElementById('productReorderLevel');
+  if (el) el.value = 3;
+}
+
+
+// ---- Barcode / Product Code Scanner ----
+let barcodeStream = null;
+
+function openBarcodeScanner() {
+  document.getElementById('barcodeScannerModal').classList.remove('hidden');
+  startBarcodeCamera();
+}
+
+function closeBarcodeScanner() {
+  stopBarcodeCamera();
+  document.getElementById('barcodeScannerModal').classList.add('hidden');
+}
+
+async function startBarcodeCamera() {
+  const video = document.getElementById('barcodeVideo');
+  const statusEl = document.getElementById('barcodeStatus');
+  try {
+    barcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = barcodeStream;
+    video.play();
+
+    // Use BarcodeDetector if available (Chrome/Android)
+    if ('BarcodeDetector' in window) {
+      statusEl.textContent = '📷 Camera ready — point at barcode';
+      statusEl.style.color = 'var(--teal)';
+      const detector = new BarcodeDetector({ formats: ['code_128','code_39','ean_13','ean_8','qr_code','upc_a','upc_e'] });
+      const scanInterval = setInterval(async () => {
+        if (!barcodeStream) { clearInterval(scanInterval); return; }
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes.length > 0) {
+            clearInterval(scanInterval);
+            handleScannedCode(barcodes[0].rawValue);
+          }
+        } catch(e) {}
+      }, 300);
+    } else {
+      statusEl.textContent = '⚠️ Auto-scan not supported — type code manually below';
+      statusEl.style.color = 'var(--warning)';
+    }
+  } catch(err) {
+    statusEl.textContent = '❌ Camera access denied — use manual entry below';
+    statusEl.style.color = 'var(--danger)';
+    video.style.display = 'none';
+  }
+}
+
+function stopBarcodeCamera() {
+  if (barcodeStream) {
+    barcodeStream.getTracks().forEach(t => t.stop());
+    barcodeStream = null;
+  }
+  const video = document.getElementById('barcodeVideo');
+  if (video) video.srcObject = null;
+}
+
+function handleScannedCode(code) {
+  closeBarcodeScanner();
+  // Try to find product by code
+  const product = allProducts.find(p => p.product_code === code);
+  if (product) {
+    // Auto-select in sale form
+    const sel = document.getElementById('saleProduct');
+    if (sel) {
+      sel.value = product.id;
+      updateSalePreview();
+      showToast(`✅ Scanned: ${product.name}`, 'success');
+    }
+    // Also fill product code field if in product modal
+    const codeEl = document.getElementById('productCode');
+    if (codeEl && document.getElementById('productModal') && !document.getElementById('productModal').classList.contains('hidden')) {
+      codeEl.value = code;
+    }
+  } else {
+    // Code not found — fill into product code field or search
+    showToast(`🔍 Code: ${code} — not found in products`, 'warning');
+    const codeEl = document.getElementById('productCode');
+    if (codeEl) codeEl.value = code;
+    const manualInput = document.getElementById('barcodeManualInput');
+    if (manualInput) manualInput.value = code;
+  }
+}
+
+function submitManualBarcode() {
+  const code = document.getElementById('barcodeManualInput').value.trim();
+  if (!code) { showToast('Enter a product code', 'warning'); return; }
+  handleScannedCode(code);
+}
+
+
+// ---- Enhanced Profit Margin in renderProducts ----
+// Override renderProducts to include margin color-coding
+const _origRenderProducts = renderProducts;
+function renderProducts(products) {
+  const tbody = document.getElementById('productsBody');
+  if (!products.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No products found</td></tr>'; return; }
+  tbody.innerHTML = products.map(p => {
+    const margin = p.selling_price > 0 ? Math.round(((p.selling_price - p.buying_price) / p.selling_price) * 100) : 0;
+    const marginClass = margin >= 30 ? 'margin-high' : margin >= 15 ? 'margin-mid' : 'margin-low';
+    const marginLabel = margin >= 30 ? '🟢' : margin >= 15 ? '🟡' : '🔴';
+    const sc = p.stock === 0 ? 'stock-out' : p.stock <= (p.reorder_level || LOW_STOCK_THRESHOLD) ? 'stock-low' : 'stock-ok';
+    const reorderLevel = p.reorder_level || LOW_STOCK_THRESHOLD;
+    return `<tr>
+      <td><strong>${escHtml(p.name)}</strong></td>
+      <td>${escHtml(p.categories?.name || '—')}</td>
+      <td class="mono" style="color:var(--text-muted);font-size:11px">${escHtml(p.product_code || '—')}</td>
+      <td class="mono">KSh ${fmt(p.buying_price)}</td>
+      <td class="mono">KSh ${fmt(p.selling_price)}</td>
+      <td><span class="${sc}">${p.stock}</span> <span style="font-size:10px;color:var(--text-muted)">min:${reorderLevel}</span></td>
+      <td><span class="margin-badge ${marginClass}" title="${margin >= 30 ? 'Good margin' : margin >= 15 ? 'Moderate margin' : 'Low margin — review pricing'}">${marginLabel} ${margin}%</span></td>
+      <td><div class="action-btns">
+        <button class="btn btn-sm btn-outline" onclick="openEditProduct('${p.id}')">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}','${escHtml(p.name)}')">🗑️</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+// Alert on sale when stock drops low
+const _origHandleRecordSale = handleRecordSale;
+async function handleRecordSale(e) {
+  e.preventDefault();
+  const productId = document.getElementById('saleProduct').value;
+  const qty = parseInt(document.getElementById('saleQty').value);
+  const product = allProducts.find(p => p.id === productId);
+
+  // Run original sale handler
+  await _origHandleRecordSale(e);
+
+  // Check stock AFTER sale
+  if (product) {
+    const newStock = product.stock - qty;
+    const reorderLevel = product.reorder_level || LOW_STOCK_THRESHOLD;
+    if (newStock <= reorderLevel) {
+      setTimeout(() => checkAndAlertLowStock({ ...product, stock: newStock }), 800);
+    }
+  }
+}
