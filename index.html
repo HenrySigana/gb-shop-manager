@@ -573,7 +573,27 @@
     </div>
   </div>
 </div>
-
+<!-- ===== BARCODE SCANNER MODAL ===== -->
+<div id="barcodeScannerModal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeBarcodeScanner()"></div>
+  <div class="modal-card" style="max-width:420px">
+    <div class="modal-header">
+      <h3>📷 Scan Product Barcode</h3>
+      <button class="modal-close" onclick="closeBarcodeScanner()">✕</button>
+    </div>
+    <div style="padding:1rem">
+      <video id="barcodeVideo" style="width:100%;border-radius:10px;background:#000;max-height:260px;object-fit:cover" autoplay playsinline></video>
+      <p id="barcodeStatus" style="text-align:center;margin:.75rem 0;font-size:13px;color:var(--text-muted)">Starting camera...</p>
+      <div style="border-top:1px solid var(--border);padding-top:.75rem;margin-top:.5rem">
+        <label style="font-size:13px;font-weight:600">Or enter code manually:</label>
+        <div style="display:flex;gap:8px;margin-top:.5rem">
+          <input type="text" id="barcodeManualInput" placeholder="e.g. BAG-001 or 6001234567890" style="flex:1" />
+          <button class="btn btn-primary" onclick="submitManualBarcode()">Search</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="sidebarOverlay" class="sidebar-overlay hidden" onclick="closeSidebar()"></div>
 
 
