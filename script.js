@@ -1416,7 +1416,6 @@ updateLowStockBanner = updateLowStockBannerEnhanced;
 
 // ---- Reorder Level Support ----
 // This patches handleSaveProduct to save reorder_level from the new field
-const _origHandleSaveProduct = handleSaveProduct;
 async function handleSaveProduct(e) {
   e.preventDefault();
   const id = document.getElementById('productId').value;
