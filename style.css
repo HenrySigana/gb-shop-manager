@@ -363,3 +363,10 @@ ul{list-style:none}
   transition: width linear;
   z-index: 200;
 }
+/* ===== GROUP 1: STOCK & INVENTORY ENHANCEMENTS ===== */
+.margin-high { background: rgba(45,180,70,.18); color: #1a7a2e; border-color: rgba(45,180,70,.3); }
+.margin-mid  { background: rgba(230,180,20,.18); color: #8a6200; border-color: rgba(230,180,20,.3); }
+.margin-low  { background: rgba(220,50,50,.15); color: #9b1c1c; border-color: rgba(220,50,50,.25); }
+.stock-low   { color: #d97706; font-weight: 700; }
+.stock-out   { color: #dc2626; font-weight: 700; }
+.stock-ok    { color: #16a34a; font-weight: 600; }
