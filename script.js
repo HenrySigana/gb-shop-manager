@@ -1587,22 +1587,16 @@ function renderProducts(products) {
 }
 
 // Alert on sale when stock drops low
-const _origHandleRecordSale = handleRecordSale;
-async function handleRecordSale(e) {
-  e.preventDefault();
+document.addEventListener('submit', async function(e) {
+  if (e.target.id !== 'saleForm') return;
   const productId = document.getElementById('saleProduct').value;
-  const qty = parseInt(document.getElementById('saleQty').value);
+  const qty = parseInt(document.getElementById('saleQty').value) || 0;
   const product = allProducts.find(p => p.id === productId);
-
-  // Run original sale handler
-  await _origHandleRecordSale(e);
-
-  // Check stock AFTER sale
   if (product) {
     const newStock = product.stock - qty;
     const reorderLevel = product.reorder_level || LOW_STOCK_THRESHOLD;
     if (newStock <= reorderLevel) {
-      setTimeout(() => checkAndAlertLowStock({ ...product, stock: newStock }), 800);
+      setTimeout(() => checkAndAlertLowStock({ ...product, stock: newStock }), 1500);
     }
   }
-}
+}, true);
