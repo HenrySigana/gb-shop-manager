@@ -370,3 +370,31 @@ ul{list-style:none}
 .stock-low   { color: #d97706; font-weight: 700; }
 .stock-out   { color: #dc2626; font-weight: 700; }
 .stock-ok    { color: #16a34a; font-weight: 600; }
+/* ===== LOGIN BRANDING ===== */
+.login-brand-top {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--primary, #2d5a27);
+  background: rgba(45,90,39,.1);
+  padding: 5px 16px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+  display: inline-block;
+  border: 1px solid rgba(45,90,39,.2);
+}
+.login-tagline {
+  font-size: 13px;
+  color: var(--text-muted, #888);
+  font-style: italic;
+  margin-top: 6px;
+  letter-spacing: 0.3px;
+}
+.login-divider {
+  width: 50px;
+  height: 3px;
+  background: linear-gradient(90deg, #2d5a27, #3d8b37);
+  border-radius: 2px;
+  margin: 14px auto 4px;
+}
