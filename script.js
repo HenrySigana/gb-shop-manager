@@ -537,22 +537,25 @@ function populateSaleDropdowns() {
 
   updateSalePreview();
 }
-
 function updateSalePreview() {
-  const sel  = document.getElementById('saleProduct');
-  const qty  = parseInt(document.getElementById('saleQty').value) || 0;
-  const disc = parseFloat(document.getElementById('saleDiscount').value) || 0;
-  const opt  = sel.options[sel.selectedIndex];
-  const sell = opt ? parseFloat(opt.dataset.sell || 0) : 0;
-  const buy  = opt ? parseFloat(opt.dataset.buy  || 0) : 0;
-  const total  = Math.max(0, sell * qty - disc);
-  const profit = Math.max(0, (sell - buy) * qty - disc);
-  document.getElementById('previewUnitPrice').textContent = `KSh ${fmt(sell)}`;
+  const sel         = document.getElementById('saleProduct');
+  const qty         = parseInt(document.getElementById('saleQty').value) || 0;
+  const disc        = parseFloat(document.getElementById('saleDiscount').value) || 0;
+  const customPrice = parseFloat(document.getElementById('saleCustomPrice')?.value) || 0;
+  const opt         = sel.options[sel.selectedIndex];
+  const normalSell  = opt ? parseFloat(opt.dataset.sell || 0) : 0;
+  const buy         = opt ? parseFloat(opt.dataset.buy  || 0) : 0;
+  const sell        = customPrice > 0 ? customPrice : normalSell;
+  const total       = Math.max(0, sell * qty - disc);
+  const profit      = Math.max(0, (sell - buy) * qty - disc);
+  document.getElementById('previewUnitPrice').textContent = customPrice > 0
+    ? `KSh ${fmt(sell)} ✏️` : `KSh ${fmt(sell)}`;
   document.getElementById('previewQty').textContent       = qty;
   document.getElementById('previewDiscount').textContent  = `KSh ${fmt(disc)}`;
   document.getElementById('previewTotal').textContent     = `KSh ${fmt(total)}`;
   document.getElementById('previewProfit').textContent    = `KSh ${fmt(profit)}`;
 }
+
 
 async function handleRecordSale(e) {
   e.preventDefault();
