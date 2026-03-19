@@ -1449,21 +1449,23 @@ async function handleSaveProduct(e) {
 }
 
 // Patch openEditProduct to fill reorder level
-const _origOpenEditProduct = openEditProduct;
-function openEditProduct(id) {
-  _origOpenEditProduct(id);
-  const p = allProducts.find(x => x.id === id);
-  const el = document.getElementById('productReorderLevel');
-  if (p && el) el.value = p.reorder_level || 3;
-}
-
-// Patch openProductModal to reset reorder level
-const _origOpenProductModal = openProductModal;
-function openProductModal() {
-  _origOpenProductModal();
-  const el = document.getElementById('productReorderLevel');
-  if (el) el.value = 3;
-}
+document.addEventListener('click', function(e) {
+  // Fill reorder level when edit product modal opens
+  const editBtn = e.target.closest('[onclick*="openEditProduct"]');
+  if (editBtn) {
+    setTimeout(() => {
+      const modal = document.getElementById('productModal');
+      if (modal && !modal.classList.contains('hidden')) {
+        const idMatch = editBtn.getAttribute('onclick').match(/'([^']+)'/);
+        if (idMatch) {
+          const p = allProducts.find(x => x.id === idMatch[1]);
+          const el = document.getElementById('productReorderLevel');
+          if (p && el) el.value = p.reorder_level || 3;
+        }
+      }
+    }, 50);
+  }
+});
 
 
 // ---- Barcode / Product Code Scanner ----
