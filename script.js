@@ -2,7 +2,8 @@
    GB SHOP MANAGER v2 — script.js
    Features: Multi-user PIN, Categories, Suppliers, Sales+Discounts,
    M-Pesa tracking, Receipts, Expenses, Mkopo/Debt, Restock Log,
-   Customers+Location, Charts, Excel/PDF Export, WhatsApp Reports
+   Customers+Location, Charts, Excel/PDF Export, WhatsApp Reports,
+   Low Stock Alerts, Reorder Levels, Barcode Scanner, Margin Colors
 ============================================================ */
 
 // ============================================================
@@ -12,11 +13,11 @@ const SUPABASE_URL  = 'https://ycrhedxrapspfbszlydc.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljcmhlZHhyYXBzcGZic3pseWRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4MTY2NTYsImV4cCI6MjA4OTM5MjY1Nn0.aQvRzk9p-L8IZar2-bVM2XlYFpu6DhT4fWqIW-ZOteA';
 
 // ============================================================
-// 👥 USERS — Add/remove users here
+// 👥 USERS
 // ============================================================
 const USERS = [
-  { id: 'owner',   name: 'Owner',     role: 'Admin',   pin: '7526', avatar: '👑' },
-  { id: 'staff1',  name: 'Staff',     role: 'Cashier', pin: '7526', avatar: '👤' },
+  { id: 'owner',  name: 'Owner', role: 'Admin',   pin: '7526', avatar: '👑' },
+  { id: 'staff1', name: 'Staff', role: 'Cashier', pin: '7526', avatar: '👤' },
 ];
 
 // ============================================================
@@ -31,7 +32,10 @@ let allSuppliers  = [];
 let currentUser   = null;
 let currentReport = 'daily';
 let reportChart   = null;
-let lastSaleData  = null; // for receipt
+let lastSaleData  = null;
+
+// ---- Low Stock ----
+const LOW_STOCK_THRESHOLD = 3;
 
 // ============================================================
 // 🕐 CLOCK
@@ -56,6 +60,38 @@ function showToast(msg, type = 'success') {
   t.className = `toast ${type}`;
   t.classList.remove('hidden');
   setTimeout(() => t.classList.add('hidden'), 3500);
+}
+
+// ============================================================
+// 🔔 LOW STOCK SOUND
+// ============================================================
+function playLowStockSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch(e) {}
+}
+
+function checkAndAlertLowStock(product) {
+  const level = product.reorder_level || LOW_STOCK_THRESHOLD;
+  if (product.stock === 0) {
+    playLowStockSound();
+    setTimeout(() => playLowStockSound(), 600);
+    showToast(`🚨 OUT OF STOCK: ${product.name}!`, 'error');
+  } else if (product.stock <= level) {
+    playLowStockSound();
+    showToast(`⚠️ Low stock: ${product.name} — only ${product.stock} left!`, 'warning');
+  }
 }
 
 // ============================================================
@@ -97,9 +133,7 @@ function addPin(digit) {
   if (pinValue.length >= 4) return;
   pinValue += digit;
   updatePinDots(pinValue);
-  if (pinValue.length === 4) {
-    setTimeout(checkPin, 150);
-  }
+  if (pinValue.length === 4) setTimeout(checkPin, 150);
 }
 
 function clearPin() {
@@ -148,10 +182,8 @@ function handleLogout() {
 function checkSession() {
   const saved = sessionStorage.getItem('gb_user');
   if (saved) {
-    try {
-      currentUser = JSON.parse(saved);
-      showApp();
-    } catch(e) { sessionStorage.removeItem('gb_user'); }
+    try { currentUser = JSON.parse(saved); showApp(); }
+    catch(e) { sessionStorage.removeItem('gb_user'); }
   }
 }
 
@@ -173,6 +205,7 @@ async function initApp() {
   populateSaleDropdowns();
   setDefaultReportDate();
   setDefaultExpenseDate();
+  startIdleWatcher();
 }
 
 // ============================================================
@@ -202,8 +235,16 @@ function showSection(name, linkEl) {
   return false;
 }
 
-function openSidebar()  { document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebarOverlay').classList.remove('hidden'); document.getElementById('sidebarOverlay').classList.add('visible'); }
-function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('visible'); document.getElementById('sidebarOverlay').classList.add('hidden'); }
+function openSidebar()  {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebarOverlay').classList.remove('hidden');
+  document.getElementById('sidebarOverlay').classList.add('visible');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('visible');
+  document.getElementById('sidebarOverlay').classList.add('hidden');
+}
 
 // ============================================================
 // 🏷️ CATEGORIES
@@ -383,15 +424,18 @@ function renderProducts(products) {
   if (!products.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No products found</td></tr>'; return; }
   tbody.innerHTML = products.map(p => {
     const margin = p.selling_price > 0 ? Math.round(((p.selling_price - p.buying_price) / p.selling_price) * 100) : 0;
-    const sc = p.stock === 0 ? 'stock-out' : p.stock < 3 ? 'stock-low' : 'stock-ok';
+    const mc = margin >= 30 ? 'margin-high' : margin >= 15 ? 'margin-mid' : 'margin-low';
+    const mi = margin >= 30 ? '🟢' : margin >= 15 ? '🟡' : '🔴';
+    const rl = p.reorder_level || LOW_STOCK_THRESHOLD;
+    const sc = p.stock === 0 ? 'stock-out' : p.stock <= rl ? 'stock-low' : 'stock-ok';
     return `<tr>
       <td><strong>${escHtml(p.name)}</strong></td>
       <td>${escHtml(p.categories?.name || '—')}</td>
       <td class="mono" style="color:var(--text-muted);font-size:11px">${escHtml(p.product_code || '—')}</td>
       <td class="mono">KSh ${fmt(p.buying_price)}</td>
       <td class="mono">KSh ${fmt(p.selling_price)}</td>
-      <td><span class="${sc}">${p.stock}</span></td>
-      <td><span class="margin-badge">${margin}%</span></td>
+      <td><span class="${sc}">${p.stock}</span><span style="font-size:10px;color:var(--text-muted);margin-left:4px">min:${rl}</span></td>
+      <td><span class="margin-badge ${mc}">${mi} ${margin}%</span></td>
       <td><div class="action-btns">
         <button class="btn btn-sm btn-outline" onclick="openEditProduct('${p.id}')">✏️</button>
         <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}','${escHtml(p.name)}')">🗑️</button>
@@ -401,11 +445,10 @@ function renderProducts(products) {
 }
 
 function filterProducts() {
-  const q  = document.getElementById('productSearch').value.toLowerCase();
+  const q   = document.getElementById('productSearch').value.toLowerCase();
   const cat = document.getElementById('productCategoryFilter').value;
   const filtered = allProducts.filter(p =>
-    p.name.toLowerCase().includes(q) &&
-    (!cat || p.category_id === cat)
+    p.name.toLowerCase().includes(q) && (!cat || p.category_id === cat)
   );
   renderProducts(filtered);
 }
@@ -415,8 +458,11 @@ function openProductModal() {
   ['productId','productName','productCode','productBuyPrice','productSellPrice','productStock'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('productCategory').value = '';
   document.getElementById('productSupplier').value = '';
+  const rl = document.getElementById('productReorderLevel');
+  if (rl) rl.value = 3;
   document.getElementById('productModal').classList.remove('hidden');
 }
+
 function openEditProduct(id) {
   const p = allProducts.find(x => x.id === id);
   if (!p) return;
@@ -429,6 +475,8 @@ function openEditProduct(id) {
   document.getElementById('productStock').value     = p.stock;
   document.getElementById('productCategory').value  = p.category_id || '';
   document.getElementById('productSupplier').value  = p.supplier_id || '';
+  const rl = document.getElementById('productReorderLevel');
+  if (rl) rl.value = p.reorder_level || 3;
   document.getElementById('productModal').classList.remove('hidden');
 }
 function closeProductModal() { document.getElementById('productModal').classList.add('hidden'); }
@@ -439,6 +487,7 @@ async function handleSaveProduct(e) {
   const buyPrice  = parseFloat(document.getElementById('productBuyPrice').value);
   const sellPrice = parseFloat(document.getElementById('productSellPrice').value);
   if (sellPrice < buyPrice) { showToast('⚠️ Selling price < buying price!', 'warning'); return; }
+  const rlEl = document.getElementById('productReorderLevel');
   const payload = {
     name:          document.getElementById('productName').value.trim(),
     product_code:  document.getElementById('productCode').value.trim() || null,
@@ -447,6 +496,7 @@ async function handleSaveProduct(e) {
     stock:         parseInt(document.getElementById('productStock').value),
     category_id:   document.getElementById('productCategory').value || null,
     supplier_id:   document.getElementById('productSupplier').value || null,
+    reorder_level: rlEl ? (parseInt(rlEl.value) || 3) : 3,
   };
   let error;
   if (id) { ({ error } = await db.from('products').update(payload).eq('id', id)); }
@@ -514,7 +564,6 @@ async function handleRecordSale(e) {
   const mpesaRef   = document.getElementById('mpesaRef').value.trim() || null;
 
   if (!productId) { showToast('Please select a product', 'warning'); return; }
-
   const product = allProducts.find(p => p.id === productId);
   if (!product) return;
   if (qty > product.stock) { showToast(`⚠️ Only ${product.stock} in stock!`, 'warning'); return; }
@@ -535,15 +584,11 @@ async function handleRecordSale(e) {
 
   await db.from('products').update({ stock: product.stock - qty }).eq('id', productId);
 
-  // If credit, auto-add to mkopo
   if (payment === 'Credit' && customerId) {
     const cust = allCustomers.find(c => c.id === customerId);
     await db.from('mkopo').insert([{
-      customer_name: cust?.name || 'Unknown',
-      phone: cust?.phone || '',
-      item: `${product.name} x${qty}`,
-      amount: totalPrice,
-      status: 'pending'
+      customer_name: cust?.name || 'Unknown', phone: cust?.phone || '',
+      item: `${product.name} x${qty}`, amount: totalPrice, status: 'pending'
     }]);
   }
 
@@ -558,9 +603,15 @@ async function handleRecordSale(e) {
   await loadProducts();
   populateSaleDropdowns();
   loadTodaySales();
-  updateLowStockBanner();
 
-  // Show receipt
+  // Low stock alert after sale
+  const newStock = product.stock - qty;
+  const reorderLevel = product.reorder_level || LOW_STOCK_THRESHOLD;
+  if (newStock <= reorderLevel) {
+    setTimeout(() => checkAndAlertLowStock({ ...product, stock: newStock }), 800);
+  }
+
+  updateLowStockBanner();
   showReceipt(lastSaleData);
 }
 
@@ -663,11 +714,9 @@ async function loadExpenses() {
     </tr>`).join('');
   }
 
-  // Stats
   const todayTotal = expenses.reduce((s, r) => s + r.amount, 0);
   document.getElementById('expStatToday').textContent = `KSh ${fmt(todayTotal)}`;
 
-  // Month total
   const m = new Date(); const ms = `${m.getFullYear()}-${String(m.getMonth()+1).padStart(2,'0')}-01`;
   const { data: monthData } = await db.from('expenses').select('amount').gte('created_at', ms + 'T00:00:00');
   const mTotal = (monthData || []).reduce((s, r) => s + r.amount, 0);
@@ -792,7 +841,6 @@ async function loadRestock() {
 }
 
 function openRestockModal() {
-  // Populate product dropdown
   const sel = document.getElementById('restockProduct');
   sel.innerHTML = '<option value="">-- Select Product --</option>' +
     allProducts.map(p => `<option value="${p.id}">${escHtml(p.name)} (Stock: ${p.stock})</option>`).join('');
@@ -816,7 +864,6 @@ async function handleSaveRestock(e) {
   }]);
   if (error) { showToast('❌ ' + error.message, 'error'); return; }
 
-  // Update product stock
   const product = allProducts.find(p => p.id === productId);
   if (product) await db.from('products').update({ stock: product.stock + qty }).eq('id', productId);
 
@@ -912,31 +959,27 @@ async function loadDashboard() {
 
   const totalSales  = (sales||[]).reduce((s,r) => s + r.total_price, 0);
   const totalProfit = (sales||[]).reduce((s,r) => s + r.profit, 0);
-  const lowStock    = allProducts.filter(p => p.stock < 3);
+  const lowStock    = allProducts.filter(p => p.stock < (p.reorder_level || LOW_STOCK_THRESHOLD));
 
   document.getElementById('statSalesToday').textContent  = `KSh ${fmt(totalSales)}`;
   document.getElementById('statProfitToday').textContent = `KSh ${fmt(totalProfit)}`;
   document.getElementById('statProducts').textContent    = allProducts.length;
   document.getElementById('statLowStock').textContent    = lowStock.length;
 
-  // Expenses today
   const { data: expData } = await db.from('expenses').select('amount')
     .gte('created_at', today + 'T00:00:00').lte('created_at', today + 'T23:59:59');
   const totalExp = (expData||[]).reduce((s,r) => s + r.amount, 0);
   document.getElementById('statExpenses').textContent = `KSh ${fmt(totalExp)}`;
 
-  // Unpaid debts
   const { data: debtData } = await db.from('mkopo').select('amount').neq('status','paid');
   const totalDebt = (debtData||[]).reduce((s,r) => s + r.amount, 0);
   document.getElementById('statDebts').textContent = `KSh ${fmt(totalDebt)}`;
 
-  // Low stock list
   const listEl = document.getElementById('lowStockList');
   listEl.innerHTML = lowStock.length
     ? lowStock.map(p => `<div class="low-stock-item"><span>⚠️ ${escHtml(p.name)}</span><span class="stock-badge">${p.stock} left</span></div>`).join('')
     : '<p class="empty-state">✅ All products well stocked!</p>';
 
-  // Recent sales
   const tbody = document.getElementById('recentSalesBody');
   const recent = (sales||[]).slice(0,5);
   tbody.innerHTML = recent.length
@@ -953,13 +996,21 @@ async function loadDashboard() {
 }
 
 function updateLowStockBanner() {
-  const low = allProducts.filter(p => p.stock < 3);
+  const low = allProducts.filter(p => p.stock <= (p.reorder_level || LOW_STOCK_THRESHOLD));
+  const oos = low.filter(p => p.stock === 0);
   const banner = document.getElementById('lowStockBanner');
   if (low.length > 0) {
-    document.getElementById('lowStockMessage').textContent = 'Low stock: ' + low.map(p => `${p.name} (${p.stock})`).join(', ');
+    const oosNames = oos.map(p => p.name).join(', ');
+    const lowNames = low.filter(p => p.stock > 0).map(p => `${p.name} (${p.stock})`).join(', ');
+    const msg = oos.length > 0
+      ? `🚨 OUT OF STOCK: ${oosNames}${lowNames ? ' | ⚠️ Low: ' + lowNames : ''}`
+      : `⚠️ Low stock: ${lowNames}`;
+    document.getElementById('lowStockMessage').textContent = msg;
     banner.classList.remove('hidden');
+    banner.style.background = oos.length > 0 ? 'linear-gradient(135deg,#7f1d1d,#991b1b)' : '';
   } else {
     banner.classList.add('hidden');
+    banner.style.background = '';
   }
 }
 
@@ -1043,7 +1094,6 @@ async function loadBestSelling() {
       </tr>`).join('')
     : '<tr><td colspan="8" class="empty-state">No sales data</td></tr>';
 
-  // Horizontal bar chart
   renderBestSellingChart(sorted);
 }
 
@@ -1074,7 +1124,6 @@ function renderSalesChart(sales, mode) {
   if (reportChart) { reportChart.destroy(); reportChart = null; }
 
   if (mode === 'daily') {
-    // Sales by hour
     const hours = Array.from({length:24}, (_,i) => `${String(i).padStart(2,'0')}:00`);
     const totals = new Array(24).fill(0);
     sales.forEach(s => { const h = new Date(s.created_at).getHours(); totals[h] += s.total_price; });
@@ -1085,12 +1134,8 @@ function renderSalesChart(sales, mode) {
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
     });
   } else {
-    // Sales by day
     const dayMap = {};
-    sales.forEach(s => {
-      const d = s.created_at.split('T')[0];
-      dayMap[d] = (dayMap[d] || 0) + s.total_price;
-    });
+    sales.forEach(s => { const d = s.created_at.split('T')[0]; dayMap[d] = (dayMap[d] || 0) + s.total_price; });
     const labels = Object.keys(dayMap).sort();
     const vals = labels.map(l => dayMap[l]);
     document.getElementById('chartTitle').textContent = '📊 Sales by Day';
@@ -1129,7 +1174,7 @@ function exportToExcel() {
 }
 
 // ============================================================
-// 📄 EXPORT PDF (simple print)
+// 📄 EXPORT PDF
 // ============================================================
 function exportToPDF() {
   const title  = document.getElementById('reportTableTitle').textContent;
@@ -1185,7 +1230,7 @@ async function sendWhatsAppReport() {
   const totalDebt    = (debts||[]).reduce((s,r) => s + r.amount, 0);
   const mpesaSales   = (sales||[]).filter(s => s.payment_method === 'M-Pesa').reduce((s,r) => s + r.total_price, 0);
   const cashSales    = (sales||[]).filter(s => s.payment_method === 'Cash').reduce((s,r) => s + r.total_price, 0);
-  const lowStock     = allProducts.filter(p => p.stock < 3);
+  const lowStock     = allProducts.filter(p => p.stock < (p.reorder_level || LOW_STOCK_THRESHOLD));
 
   const msg = `
 🛍️ *GB SHOP MANAGER — DAILY REPORT*
@@ -1208,338 +1253,8 @@ _GB Shop Manager_`.trim();
 }
 
 // ============================================================
-// 🛠️ HELPERS
+// 📷 BARCODE SCANNER
 // ============================================================
-function fmt(n) {
-  if (isNaN(n) || n === null) return '0.00';
-  return parseFloat(n).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function todayStr()        { return new Date().toISOString().split('T')[0]; }
-function monthEnd(y, m)    { return new Date(y, m, 0).toISOString().split('T')[0]; }
-function getMonthName(n)   { return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][n-1]||''; }
-function timeStr(iso)      { return iso ? new Date(iso).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}) : ''; }
-function dateStr(iso)      { return iso ? new Date(iso).toLocaleDateString('en-KE',{day:'2-digit',month:'short',year:'numeric'}) : ''; }
-function dtStr(iso)        { return iso ? new Date(iso).toLocaleString('en-KE',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : ''; }
-function escHtml(s)        { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-// ============================================================
-// 🔑 BOOT
-// ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-  buildUserSelect();
-  checkSession();
-});
-
-// ============================================================
-// 🔒 LOCK SCREEN
-// Auto-locks after 5 minutes of inactivity
-// ============================================================
-
-let lockPin        = '';
-let idleTimer      = null;
-const IDLE_MINUTES = 5; // Auto-lock after 5 mins of inactivity
-
-/** Lock the app immediately */
-function lockApp() {
-  lockPin = '';
-  updateLockDots('');
-  document.getElementById('lockPinError').classList.add('hidden');
-  document.getElementById('lockUserName').textContent =
-    `${currentUser?.avatar || '👤'} ${currentUser?.name || 'User'}`;
-  document.getElementById('lockScreen').classList.remove('hidden');
-  sessionStorage.setItem('gb_locked', '1');
-  clearIdleTimer();
-}
-
-/** Unlock the app */
-function unlockApp() {
-  document.getElementById('lockScreen').classList.add('hidden');
-  sessionStorage.removeItem('gb_locked');
-  lockPin = '';
-  updateLockDots('');
-  resetIdleTimer();
-  showToast('🔓 Unlocked!', 'success');
-}
-
-/** Add digit to lock PIN */
-function addLockPin(digit) {
-  if (lockPin.length >= 4) return;
-  lockPin += digit;
-  updateLockDots(lockPin);
-  if (lockPin.length === 4) {
-    setTimeout(checkLockPin, 150);
-  }
-}
-
-/** Clear last digit from lock PIN */
-function clearLockPin() {
-  lockPin = lockPin.slice(0, -1);
-  updateLockDots(lockPin);
-  document.getElementById('lockPinError').classList.add('hidden');
-}
-
-/** Check lock PIN */
-function checkLockPin() {
-  if (!currentUser) return;
-  // Find user in USERS array and check PIN
-  const user = USERS.find(u => u.id === currentUser.id);
-  const correctPin = user ? user.pin : '7526';
-
-  if (lockPin === correctPin) {
-    unlockApp();
-  } else {
-    document.getElementById('lockPinError').classList.remove('hidden');
-    lockPin = '';
-    updateLockDots('');
-    // Shake animation
-    const dots = document.getElementById('lockPinDots');
-    dots.style.animation = 'none';
-    void dots.offsetWidth;
-    dots.style.animation = 'shake 0.4s ease';
-  }
-}
-
-/** Update lock screen pin dots */
-function updateLockDots(val) {
-  document.querySelectorAll('#lockPinDots span').forEach((d, i) => {
-    d.classList.toggle('filled', i < val.length);
-  });
-}
-
-/** Reset the idle auto-lock timer */
-function resetIdleTimer() {
-  clearIdleTimer();
-  idleTimer = setTimeout(() => {
-    if (currentUser && !document.getElementById('lockScreen').classList.contains('hidden') === false) {
-      lockApp();
-      showToast('🔒 Auto-locked due to inactivity', 'warning');
-    }
-  }, IDLE_MINUTES * 60 * 1000);
-}
-
-function clearIdleTimer() {
-  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
-}
-
-/** Listen for user activity to reset idle timer */
-function startIdleWatcher() {
-  ['click', 'keydown', 'mousemove', 'touchstart', 'scroll'].forEach(evt => {
-    document.addEventListener(evt, resetIdleTimer, { passive: true });
-  });
-  resetIdleTimer();
-}
-
-// Override showApp to start idle watcher and check lock state
-const _origShowApp = showApp;
-// Patch: after app shows, start idle watcher and check if was locked
-document.addEventListener('DOMContentLoaded', () => {
-  // Check if app was locked before page reload
-  if (sessionStorage.getItem('gb_locked') === '1' && sessionStorage.getItem('gb_user')) {
-    // Re-show app but immediately lock it
-    const saved = sessionStorage.getItem('gb_user');
-    if (saved) {
-      try { currentUser = JSON.parse(saved); } catch(e) {}
-    }
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
-    lockApp();
-  }
-});
-
-// Start idle watcher when app loads
-const _origInitApp = initApp;
-async function initApp() {
-  await _origInitApp();
-  startIdleWatcher();
-}
-// ============================================================
-// 🔔 GROUP 1: STOCK & INVENTORY FEATURES
-// ============================================================
-
-const LOW_STOCK_THRESHOLD = 3;
-
-function playLowStockSound() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.5);
-  } catch(e) {}
-}
-
-function checkAndAlertLowStock(product) {
-  const level = product.reorder_level || LOW_STOCK_THRESHOLD;
-  if (product.stock === 0) {
-    playLowStockSound();
-    setTimeout(() => playLowStockSound(), 600);
-    showToast(`🚨 OUT OF STOCK: ${product.name}!`, 'error');
-  } else if (product.stock <= level) {
-    playLowStockSound();
-    showToast(`⚠️ Low stock: ${product.name} — only ${product.stock} left!`, 'warning');
-  }
-}
-
-function updateLowStockBanner() {
-  const low = allProducts.filter(p => p.stock <= (p.reorder_level || LOW_STOCK_THRESHOLD));
-  const oos = low.filter(p => p.stock === 0);
-  const banner = document.getElementById('lowStockBanner');
-  if (low.length > 0) {
-    const oosNames = oos.map(p => p.name).join(', ');
-    const lowNames = low.filter(p => p.stock > 0).map(p => `${p.name} (${p.stock})`).join(', ');
-    const msg = oos.length > 0
-      ? `🚨 OUT OF STOCK: ${oosNames}${lowNames ? ' | ⚠️ Low: ' + lowNames : ''}`
-      : `⚠️ Low stock: ${lowNames}`;
-    document.getElementById('lowStockMessage').textContent = msg;
-    banner.classList.remove('hidden');
-    banner.style.background = oos.length > 0 ? 'linear-gradient(135deg,#7f1d1d,#991b1b)' : '';
-  } else {
-    banner.classList.add('hidden');
-    banner.style.background = '';
-  }
-}
-
-function renderProducts(products) {
-  const tbody = document.getElementById('productsBody');
-  if (!products.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No products found</td></tr>';
-    return;
-  }
-  tbody.innerHTML = products.map(p => {
-    const margin = p.selling_price > 0
-      ? Math.round(((p.selling_price - p.buying_price) / p.selling_price) * 100) : 0;
-    const mc = margin >= 30 ? 'margin-high' : margin >= 15 ? 'margin-mid' : 'margin-low';
-    const mi = margin >= 30 ? '🟢' : margin >= 15 ? '🟡' : '🔴';
-    const rl = p.reorder_level || LOW_STOCK_THRESHOLD;
-    const sc = p.stock === 0 ? 'stock-out' : p.stock <= rl ? 'stock-low' : 'stock-ok';
-    return `<tr>
-      <td><strong>${escHtml(p.name)}</strong></td>
-      <td>${escHtml(p.categories?.name || '—')}</td>
-      <td class="mono" style="color:var(--text-muted);font-size:11px">${escHtml(p.product_code || '—')}</td>
-      <td class="mono">KSh ${fmt(p.buying_price)}</td>
-      <td class="mono">KSh ${fmt(p.selling_price)}</td>
-      <td><span class="${sc}">${p.stock}</span><span style="font-size:10px;color:var(--text-muted);margin-left:4px">min:${rl}</span></td>
-      <td><span class="margin-badge ${mc}">${mi} ${margin}%</span></td>
-      <td><div class="action-btns">
-        <button class="btn btn-sm btn-outline" onclick="openEditProduct('${p.id}')">✏️</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}','${escHtml(p.name)}')">🗑️</button>
-      </div></td>
-    </tr>`;
-  }).join('');
-}
-
-function openProductModal() {
-  document.getElementById('productModalTitle').textContent = 'Add New Product';
-  ['productId','productName','productCode','productBuyPrice','productSellPrice','productStock'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('productCategory').value = '';
-  document.getElementById('productSupplier').value = '';
-  const rl = document.getElementById('productReorderLevel');
-  if (rl) rl.value = 3;
-  document.getElementById('productModal').classList.remove('hidden');
-}
-
-function openEditProduct(id) {
-  const p = allProducts.find(x => x.id === id);
-  if (!p) return;
-  document.getElementById('productModalTitle').textContent = 'Edit Product';
-  document.getElementById('productId').value        = p.id;
-  document.getElementById('productName').value      = p.name;
-  document.getElementById('productCode').value      = p.product_code || '';
-  document.getElementById('productBuyPrice').value  = p.buying_price;
-  document.getElementById('productSellPrice').value = p.selling_price;
-  document.getElementById('productStock').value     = p.stock;
-  document.getElementById('productCategory').value  = p.category_id || '';
-  document.getElementById('productSupplier').value  = p.supplier_id || '';
-  const rl = document.getElementById('productReorderLevel');
-  if (rl) rl.value = p.reorder_level || 3;
-  document.getElementById('productModal').classList.remove('hidden');
-}
-
-async function handleSaveProduct(e) {
-  e.preventDefault();
-  const id = document.getElementById('productId').value;
-  const buyPrice  = parseFloat(document.getElementById('productBuyPrice').value);
-  const sellPrice = parseFloat(document.getElementById('productSellPrice').value);
-  if (sellPrice < buyPrice) { showToast('⚠️ Selling price < buying price!', 'warning'); return; }
-  const rlEl = document.getElementById('productReorderLevel');
-  const payload = {
-    name:          document.getElementById('productName').value.trim(),
-    product_code:  document.getElementById('productCode').value.trim() || null,
-    buying_price:  buyPrice,
-    selling_price: sellPrice,
-    stock:         parseInt(document.getElementById('productStock').value),
-    category_id:   document.getElementById('productCategory').value || null,
-    supplier_id:   document.getElementById('productSupplier').value || null,
-    reorder_level: rlEl ? (parseInt(rlEl.value) || 3) : 3,
-  };
-  let error;
-  if (id) { ({ error } = await db.from('products').update(payload).eq('id', id)); }
-  else    { ({ error } = await db.from('products').insert([payload])); }
-  if (error) { showToast('❌ ' + error.message, 'error'); return; }
-  showToast(id ? '✅ Product updated!' : '✅ Product added!', 'success');
-  closeProductModal();
-  await loadProducts();
-  populateSaleDropdowns();
-  updateLowStockBanner();
-}
-
-async function handleRecordSale(e) {
-  e.preventDefault();
-  const productId  = document.getElementById('saleProduct').value;
-  const customerId = document.getElementById('saleCustomer').value || null;
-  const qty        = parseInt(document.getElementById('saleQty').value);
-  const discount   = parseFloat(document.getElementById('saleDiscount').value) || 0;
-  const payment    = document.getElementById('salePayment').value;
-  const mpesaRef   = document.getElementById('mpesaRef').value.trim() || null;
-  if (!productId) { showToast('Please select a product', 'warning'); return; }
-  const product = allProducts.find(p => p.id === productId);
-  if (!product) return;
-  if (qty > product.stock) { showToast(`⚠️ Only ${product.stock} in stock!`, 'warning'); return; }
-  const totalPrice = Math.max(0, product.selling_price * qty - discount);
-  const profit     = Math.max(0, (product.selling_price - product.buying_price) * qty - discount);
-  const btn = document.getElementById('saleBtn');
-  btn.disabled = true; btn.textContent = '⏳ Processing...';
-  const { data: saleData, error } = await db.from('sales').insert([{
-    product_id: productId, customer_id: customerId,
-    quantity: qty, total_price: totalPrice, profit,
-    discount, payment_method: payment, mpesa_ref: mpesaRef
-  }]).select().single();
-  if (error) { showToast('❌ ' + error.message, 'error'); btn.disabled = false; btn.textContent = '✅ Record Sale'; return; }
-  await db.from('products').update({ stock: product.stock - qty }).eq('id', productId);
-  if (payment === 'Credit' && customerId) {
-    const cust = allCustomers.find(c => c.id === customerId);
-    await db.from('mkopo').insert([{
-      customer_name: cust?.name || 'Unknown', phone: cust?.phone || '',
-      item: `${product.name} x${qty}`, amount: totalPrice, status: 'pending'
-    }]);
-  }
-  lastSaleData = { sale: saleData, product, qty, discount, totalPrice, profit, payment, mpesaRef, customerId };
-  showToast(`✅ Sale recorded! KSh ${fmt(totalPrice)}`, 'success');
-  btn.disabled = false; btn.textContent = '✅ Record Sale';
-  document.getElementById('saleForm').reset();
-  document.getElementById('saleDiscount').value = '0';
-  updateSalePreview();
-  await loadProducts();
-  populateSaleDropdowns();
-  loadTodaySales();
-  // Check low stock after sale
-  const newStock = product.stock - qty;
-  const reorderLevel = product.reorder_level || LOW_STOCK_THRESHOLD;
-  if (newStock <= reorderLevel) {
-    setTimeout(() => checkAndAlertLowStock({ ...product, stock: newStock }), 800);
-  }
-  updateLowStockBanner();
-  showReceipt(lastSaleData);
-}
-
-// ---- Barcode Scanner ----
 let barcodeStream = null;
 
 function openBarcodeScanner() {
@@ -1607,4 +1322,124 @@ function submitManualBarcode() {
   const code = document.getElementById('barcodeManualInput').value.trim();
   if (!code) { showToast('Enter a product code', 'warning'); return; }
   handleScannedCode(code);
+}
+
+// ============================================================
+// 🛠️ HELPERS
+// ============================================================
+function fmt(n) {
+  if (isNaN(n) || n === null) return '0.00';
+  return parseFloat(n).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function todayStr()        { return new Date().toISOString().split('T')[0]; }
+function monthEnd(y, m)    { return new Date(y, m, 0).toISOString().split('T')[0]; }
+function getMonthName(n)   { return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][n-1]||''; }
+function timeStr(iso)      { return iso ? new Date(iso).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}) : ''; }
+function dateStr(iso)      { return iso ? new Date(iso).toLocaleDateString('en-KE',{day:'2-digit',month:'short',year:'numeric'}) : ''; }
+function dtStr(iso)        { return iso ? new Date(iso).toLocaleString('en-KE',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : ''; }
+function escHtml(s)        { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ============================================================
+// 🔑 BOOT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  buildUserSelect();
+  checkSession();
+  if (sessionStorage.getItem('gb_locked') === '1' && sessionStorage.getItem('gb_user')) {
+    const saved = sessionStorage.getItem('gb_user');
+    if (saved) { try { currentUser = JSON.parse(saved); } catch(e) {} }
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    lockApp();
+  }
+  const paymentSel = document.getElementById('salePayment');
+  if (paymentSel) {
+    paymentSel.addEventListener('change', function() {
+      const mpesaGroup = document.getElementById('mpesaRefGroup');
+      if (mpesaGroup) mpesaGroup.style.display = this.value === 'M-Pesa' ? 'block' : 'none';
+    });
+  }
+});
+
+// ============================================================
+// 🔒 LOCK SCREEN
+// ============================================================
+let lockPin   = '';
+let idleTimer = null;
+const IDLE_MINUTES = 5;
+
+function lockApp() {
+  lockPin = '';
+  updateLockDots('');
+  document.getElementById('lockPinError').classList.add('hidden');
+  document.getElementById('lockUserName').textContent = `${currentUser?.avatar || '👤'} ${currentUser?.name || 'User'}`;
+  document.getElementById('lockScreen').classList.remove('hidden');
+  sessionStorage.setItem('gb_locked', '1');
+  clearIdleTimer();
+}
+
+function unlockApp() {
+  document.getElementById('lockScreen').classList.add('hidden');
+  sessionStorage.removeItem('gb_locked');
+  lockPin = '';
+  updateLockDots('');
+  resetIdleTimer();
+  showToast('🔓 Unlocked!', 'success');
+}
+
+function addLockPin(digit) {
+  if (lockPin.length >= 4) return;
+  lockPin += digit;
+  updateLockDots(lockPin);
+  if (lockPin.length === 4) setTimeout(checkLockPin, 150);
+}
+
+function clearLockPin() {
+  lockPin = lockPin.slice(0, -1);
+  updateLockDots(lockPin);
+  document.getElementById('lockPinError').classList.add('hidden');
+}
+
+function checkLockPin() {
+  if (!currentUser) return;
+  const user = USERS.find(u => u.id === currentUser.id);
+  const correctPin = user ? user.pin : '7526';
+  if (lockPin === correctPin) {
+    unlockApp();
+  } else {
+    document.getElementById('lockPinError').classList.remove('hidden');
+    lockPin = '';
+    updateLockDots('');
+    const dots = document.getElementById('lockPinDots');
+    dots.style.animation = 'none';
+    void dots.offsetWidth;
+    dots.style.animation = 'shake 0.4s ease';
+  }
+}
+
+function updateLockDots(val) {
+  document.querySelectorAll('#lockPinDots span').forEach((d, i) => {
+    d.classList.toggle('filled', i < val.length);
+  });
+}
+
+function resetIdleTimer() {
+  clearIdleTimer();
+  idleTimer = setTimeout(() => {
+    if (currentUser && document.getElementById('lockScreen').classList.contains('hidden')) {
+      lockApp();
+      showToast('🔒 Auto-locked due to inactivity', 'warning');
+    }
+  }, IDLE_MINUTES * 60 * 1000);
+}
+
+function clearIdleTimer() {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+}
+
+function startIdleWatcher() {
+  ['click','keydown','mousemove','touchstart','scroll'].forEach(evt => {
+    document.addEventListener(evt, resetIdleTimer, { passive: true });
+  });
+  resetIdleTimer();
 }
