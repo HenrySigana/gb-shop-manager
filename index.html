@@ -204,9 +204,13 @@
               <input type="number" id="saleQty" min="1" value="1" required oninput="updateSalePreview()" />
             </div>
             <div class="form-group">
-              <label>Discount (KSh)</label>
-              <input type="number" id="saleDiscount" min="0" value="0" oninput="updateSalePreview()" />
-            </div>
+<label>Custom Price (KSh) <span style="font-size:11px;color:var(--text-muted)">(override sell price)</span></label>
+<input type="number" id="saleCustomPrice" min="0" placeholder="Leave blank to use normal price" oninput="updateSalePreview()" />
+</div>
+<div class="form-group">
+<label>Discount (KSh)</label>
+<input type="number" id="saleDiscount" min="0" value="0" oninput="updateSalePreview()" />
+</div>
             <div class="form-group">
               <label>Payment Method *</label>
               <select id="salePayment" required>
