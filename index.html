@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a2e1a" />
+  <meta name="description" content="GB Shop Manager - Retail Management System" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GB Shop" />
+  <title>GB Shop Manager</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<div id="toast" class="toast hidden"></div>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+   <div class="login-logo">
+  <div class="login-brand-top">GB ICT SOLUTIONS</div>
+  <div class="logo-icon">🛍️</div>
+  <h1>GB Shop Manager</h1>
+  <div class="login-tagline">Smart Stock Management for Smart Businesses</div>
+  <div class="login-divider"></div>
+</div>
+    <div id="loginUserSelect" class="user-select-grid"></div>
+    <div id="pinSection" class="hidden">
+      <p class="pin-user-label">PIN for: <strong id="pinUserName"></strong></p>
+      <div class="pin-dots" id="pinDots">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="pin-pad">
+        <button type="button" class="pin-key" onclick="addPin('1')">1</button>
+        <button type="button" class="pin-key" onclick="addPin('2')">2</button>
+        <button type="button" class="pin-key" onclick="addPin('3')">3</button>
+        <button type="button" class="pin-key" onclick="addPin('4')">4</button>
+        <button type="button" class="pin-key" onclick="addPin('5')">5</button>
+        <button type="button" class="pin-key" onclick="addPin('6')">6</button>
+        <button type="button" class="pin-key" onclick="addPin('7')">7</button>
+        <button type="button" class="pin-key" onclick="addPin('8')">8</button>
+        <button type="button" class="pin-key" onclick="addPin('9')">9</button>
+        <button type="button" class="pin-key pin-key-clear" onclick="clearPin()">⌫</button>
+        <button type="button" class="pin-key" onclick="addPin('0')">0</button>
+        <button type="button" class="pin-key pin-key-back" onclick="backToUserSelect()">↩</button>
+      </div>
+      <div id="pinError" class="pin-error hidden">❌ Wrong PIN. Try again.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app" class="app hidden">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🛍️</div>
+      <div class="sidebar-title">
+        <span class="brand">GB Shop</span>
+        <span class="sub">Manager</span>
+      </div>
+      <button class="sidebar-close" onclick="closeSidebar()">✕</button>
+    </div>
+    <ul class="nav-menu">
+      <li><a href="#" class="nav-link active" onclick="showSection('dashboard',this)"><span class="nav-icon">📊</span> Dashboard</a></li>
+      <li><a href="#" class="nav-link" onclick="showSection('products',this)"><span class="nav-icon">📦</span> Products</a></li>
+      <li><a href="#" class="nav-link" onclick="showSection('categories',this)"><span class="nav-icon">🏷️</span> Categories</a></li>
+      <li><a href="#" class="nav-link" onclick="showSection('suppliers',this)"><span class="nav-icon">🏭</span> Suppliers</a></li>
+      <li><a href="#" class="nav-link" onclick="showSection('sales',this)"><span class="nav-icon">🛒</span> Record Sale</a></li>
+      <li><a href="#" class="nav-link" onclick="showSection('expenses',this)"><span class="nav-icon">💸</span> Expenses</a></li>
+      <li><a href="#" class="nav-link" onclick="showSection('mkopo',this)"><span class="nav-icon">📋</span> Mkopo/Debt</a></li>
+      <li><a href="#" class="nav-link" onclick="showSection('restock',this)"><span class="nav-icon">🔄</span> Restock Log</a></li>
+      <li><a href="#" class="nav-link" onclick="showSection('customers',this)"><span class="nav-icon">👥</span> Customers</a></li>
+      <li><a href="#" class="nav-link" onclick="showSection('reports',this)"><span class="nav-icon">📈</span> Reports</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="user-info" id="userInfo"></div>
+      <button class="btn btn-logout" onclick="handleLogout()">🚪 Sign Out</button>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="menu-btn" onclick="openSidebar()">☰</button>
+      <h2 class="page-title" id="pageTitle">Dashboard</h2>
+      <div class="topbar-right">
+        <span class="time-badge" id="timeBadge"></span>
+        <button class="lock-btn" onclick="lockApp()" title="Lock Screen">🔒</button>
+      </div>
+    </header>
+
+    <div id="lowStockBanner" class="alert-banner hidden">
+      ⚠️ <span id="lowStockMessage"></span>
+    </div>
+
+    <!-- ========== DASHBOARD ========== -->
+    <section id="sectionDashboard" class="section active">
+      <div class="section-header">
+        <h2>Today's Overview</h2>
+        <button class="btn btn-sm btn-outline" onclick="loadDashboard()">🔄 Refresh</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card green"><div class="stat-icon">💰</div><div class="stat-info"><span class="stat-label">Sales Today</span><span class="stat-value" id="statSalesToday">KSh 0</span></div></div>
+        <div class="stat-card teal"><div class="stat-icon">📈</div><div class="stat-info"><span class="stat-label">Profit Today</span><span class="stat-value" id="statProfitToday">KSh 0</span></div></div>
+        <div class="stat-card dark"><div class="stat-icon">📦</div><div class="stat-info"><span class="stat-label">Products</span><span class="stat-value" id="statProducts">0</span></div></div>
+        <div class="stat-card warning"><div class="stat-icon">⚠️</div><div class="stat-info"><span class="stat-label">Low Stock</span><span class="stat-value" id="statLowStock">0</span></div></div>
+        <div class="stat-card purple"><div class="stat-icon">💸</div><div class="stat-info"><span class="stat-label">Expenses Today</span><span class="stat-value" id="statExpenses">KSh 0</span></div></div>
+        <div class="stat-card red"><div class="stat-icon">📋</div><div class="stat-info"><span class="stat-label">Unpaid Debts</span><span class="stat-value" id="statDebts">KSh 0</span></div></div>
+      </div>
+      <div class="card mt-2" id="lowStockCard">
+        <div class="card-header"><h3>⚠️ Low Stock Alerts</h3></div>
+        <div id="lowStockList" class="low-stock-list"><p class="empty-state">✅ All products well stocked!</p></div>
+      </div>
+      <div class="card mt-2">
+        <div class="card-header"><h3>🕒 Recent Sales</h3></div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Product</th><th>Qty</th><th>Total</th><th>Payment</th><th>Time</th></tr></thead>
+            <tbody id="recentSalesBody"><tr><td colspan="5" class="empty-state">No sales yet today</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card mt-2 whatsapp-card">
+        <div class="card-header"><h3>📱 WhatsApp Daily Report</h3></div>
+        <p class="helper-text">Send today's summary directly to WhatsApp</p>
+        <button class="btn btn-whatsapp" onclick="sendWhatsAppReport()">📲 Send Report to WhatsApp</button>
+      </div>
+    </section>
+
+    <!-- ========== PRODUCTS ========== -->
+    <section id="sectionProducts" class="section">
+      <div class="section-header">
+        <h2>Products</h2>
+        <button class="btn btn-primary" onclick="openProductModal()">+ Add Product</button>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="productSearch" placeholder="🔍 Search products..." oninput="filterProducts()" />
+        <select id="productCategoryFilter" onchange="filterProducts()">
+          <option value="">All Categories</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Category</th><th>Code</th><th>Buy Price</th><th>Sell Price</th><th>Stock</th><th>Margin</th><th>Actions</th></tr></thead>
+            <tbody id="productsBody"><tr><td colspan="8" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== CATEGORIES ========== -->
+    <section id="sectionCategories" class="section">
+      <div class="section-header">
+        <h2>Product Categories</h2>
+        <button class="btn btn-primary" onclick="openCategoryModal()">+ Add Category</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Category Name</th><th>Products</th><th>Actions</th></tr></thead>
+            <tbody id="categoriesBody"><tr><td colspan="3" class="empty-state">No categories yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== SUPPLIERS ========== -->
+    <section id="sectionSuppliers" class="section">
+      <div class="section-header">
+        <h2>Suppliers</h2>
+        <button class="btn btn-primary" onclick="openSupplierModal()">+ Add Supplier</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Products</th><th>Actions</th></tr></thead>
+            <tbody id="suppliersBody"><tr><td colspan="5" class="empty-state">No suppliers yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== SALES ========== -->
+    <section id="sectionSales" class="section">
+      <div class="section-header"><h2>Record a Sale</h2></div>
+      <div class="card sale-card">
+        <form id="saleForm" onsubmit="handleRecordSale(event)">
+          <div class="form-grid">
+           <div class="form-group">
+<label>Select Product * <button type="button" class="btn btn-sm btn-outline" style="margin-left:8px;padding:3px 10px;font-size:11px" onclick="openBarcodeScanner()">📷 Scan</button></label>
+<select id="saleProduct" required onchange="updateSalePreview()">
+                <option value="">-- Choose a product --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Quantity *</label>
+              <input type="number" id="saleQty" min="1" value="1" required oninput="updateSalePreview()" />
+            </div>
+            <div class="form-group">
+<label>Custom Price (KSh) <span style="font-size:11px;color:var(--text-muted)">(override sell price)</span></label>
+<input type="number" id="saleCustomPrice" min="0" placeholder="Leave blank to use normal price" oninput="updateSalePreview()" />
+</div>
+<div class="form-group">
+<label>Discount (KSh)</label>
+<input type="number" id="saleDiscount" min="0" value="0" oninput="updateSalePreview()" />
+</div>
+            <div class="form-group">
+              <label>Payment Method *</label>
+              <select id="salePayment" required>
+                <option value="Cash">💵 Cash</option>
+                <option value="M-Pesa">📱 M-Pesa</option>
+                <option value="Credit">📋 Credit (Mkopo)</option>
+              </select>
+            </div>
+            <div class="form-group" id="mpesaRefGroup" style="display:none">
+              <label>M-Pesa Reference</label>
+              <input type="text" id="mpesaRef" placeholder="e.g. QBZ1234XYZ" />
+            </div>
+            <div class="form-group">
+              <label>Customer (Optional)</label>
+              <select id="saleCustomer">
+                <option value="">-- Walk-in Customer --</option>
+              </select>
+            </div>
+          </div>
+          <div class="sale-preview">
+            <div class="preview-row"><span>Unit Price:</span><strong id="previewUnitPrice">KSh 0</strong></div>
+            <div class="preview-row"><span>Quantity:</span><strong id="previewQty">0</strong></div>
+            <div class="preview-row"><span>Discount:</span><strong id="previewDiscount">KSh 0</strong></div>
+            <div class="preview-row highlight"><span>Total Amount:</span><strong id="previewTotal">KSh 0</strong></div>
+            <div class="preview-row profit"><span>Profit:</span><strong id="previewProfit">KSh 0</strong></div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full" id="saleBtn">✅ Record Sale</button>
+        </form>
+      </div>
+      <div class="card mt-2">
+        <div class="card-header"><h3>📋 Today's Sales Log</h3></div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Product</th><th>Customer</th><th>Qty</th><th>Discount</th><th>Total</th><th>Payment</th><th>Receipt</th></tr></thead>
+            <tbody id="todaySalesBody"><tr><td colspan="7" class="empty-state">No sales today</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== EXPENSES ========== -->
+    <section id="sectionExpenses" class="section">
+      <div class="section-header">
+        <h2>Daily Expenses</h2>
+        <button class="btn btn-primary" onclick="openExpenseModal()">+ Add Expense</button>
+      </div>
+      <div class="stats-grid" style="margin-bottom:1rem">
+        <div class="stat-card purple"><div class="stat-icon">💸</div><div class="stat-info"><span class="stat-label">Today's Expenses</span><span class="stat-value" id="expStatToday">KSh 0</span></div></div>
+        <div class="stat-card dark"><div class="stat-icon">📅</div><div class="stat-info"><span class="stat-label">This Month</span><span class="stat-value" id="expStatMonth">KSh 0</span></div></div>
+      </div>
+      <div class="filter-bar">
+        <input type="date" id="expenseDate" onchange="loadExpenses()" />
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Description</th><th>Category</th><th>Amount</th><th>Date</th><th>Actions</th></tr></thead>
+            <tbody id="expensesBody"><tr><td colspan="5" class="empty-state">No expenses recorded</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== MKOPO / DEBT ========== -->
+    <section id="sectionMkopo" class="section">
+      <div class="section-header">
+        <h2>Mkopo / Debt Tracker</h2>
+        <button class="btn btn-primary" onclick="openMkopoModal()">+ Add Debt</button>
+      </div>
+      <div class="stats-grid" style="margin-bottom:1rem">
+        <div class="stat-card red"><div class="stat-icon">📋</div><div class="stat-info"><span class="stat-label">Total Owed</span><span class="stat-value" id="mkopoTotal">KSh 0</span></div></div>
+        <div class="stat-card warning"><div class="stat-icon">👥</div><div class="stat-info"><span class="stat-label">Debtors</span><span class="stat-value" id="mkopoCount">0</span></div></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Customer</th><th>Phone</th><th>Item</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="mkopoBody"><tr><td colspan="7" class="empty-state">No debts recorded</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== RESTOCK LOG ========== -->
+    <section id="sectionRestock" class="section">
+      <div class="section-header">
+        <h2>Stock Restock Log</h2>
+        <button class="btn btn-primary" onclick="openRestockModal()">+ Add Restock</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Product</th><th>Supplier</th><th>Qty Added</th><th>Cost/Unit</th><th>Total Cost</th><th>Date</th></tr></thead>
+            <tbody id="restockBody"><tr><td colspan="6" class="empty-state">No restock entries yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== CUSTOMERS ========== -->
+    <section id="sectionCustomers" class="section">
+      <div class="section-header">
+        <h2>Customers</h2>
+        <button class="btn btn-primary" onclick="openCustomerModal()">+ Add Customer</button>
+      </div>
+      <div class="search-bar">
+        <input type="text" id="customerSearch" placeholder="🔍 Search customers..." oninput="filterCustomers()" />
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Location</th><th>Total Purchases</th><th>Actions</th></tr></thead>
+            <tbody id="customersBody"><tr><td colspan="6" class="empty-state">No customers yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== REPORTS ========== -->
+    <section id="sectionReports" class="section">
+      <div class="section-header">
+        <h2>Reports</h2>
+        <div class="report-tabs">
+          <button class="tab-btn active" onclick="switchReport('daily',this)">Daily</button>
+          <button class="tab-btn" onclick="switchReport('monthly',this)">Monthly</button>
+          <button class="tab-btn" onclick="switchReport('bestselling',this)">Best Sellers</button>
+        </div>
+      </div>
+      <div class="card report-controls">
+        <div id="dailyControls" class="report-control">
+          <div class="form-group"><label>Select Date</label><input type="date" id="reportDate" onchange="loadDailyReport()" /></div>
+        </div>
+        <div id="monthlyControls" class="report-control hidden">
+          <div class="form-inline">
+            <div class="form-group"><label>Month</label>
+              <select id="reportMonth">
+                <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+                <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+                <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+                <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Year</label><input type="number" id="reportYear" value="2025" min="2020" max="2030" /></div>
+            <button class="btn btn-primary" onclick="loadMonthlyReport()">Generate</button>
+          </div>
+        </div>
+        <div id="bestsellingControls" class="report-control hidden">
+          <div class="form-group"><label>Top</label>
+            <select id="topN"><option value="5">Top 5</option><option value="10">Top 10</option><option value="20">Top 20</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="card mt-2" id="chartCard">
+        <div class="card-header"><h3 id="chartTitle">📊 Sales Chart</h3></div>
+        <div class="chart-wrap"><canvas id="reportChart"></canvas></div>
+      </div>
+
+      <div class="stats-grid mt-2">
+        <div class="stat-card green"><div class="stat-icon">💰</div><div class="stat-info"><span class="stat-label">Total Sales</span><span class="stat-value" id="rptTotalSales">KSh 0</span></div></div>
+        <div class="stat-card teal"><div class="stat-icon">📈</div><div class="stat-info"><span class="stat-label">Total Profit</span><span class="stat-value" id="rptTotalProfit">KSh 0</span></div></div>
+        <div class="stat-card dark"><div class="stat-icon">🛒</div><div class="stat-info"><span class="stat-label">Transactions</span><span class="stat-value" id="rptTransactions">0</span></div></div>
+      </div>
+
+      <div class="card mt-2">
+        <div class="card-header">
+          <h3 id="reportTableTitle">Sales Report</h3>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm btn-outline" onclick="exportToExcel()">📥 Excel</button>
+            <button class="btn btn-sm btn-outline" onclick="exportToPDF()">📄 PDF</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="reportTable">
+            <thead><tr><th>Product</th><th>Customer</th><th>Qty</th><th>Discount</th><th>Total</th><th>Profit</th><th>Payment</th><th>Date/Time</th></tr></thead>
+            <tbody id="reportBody"><tr><td colspan="8" class="empty-state">Select a date to view report</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card mt-2 whatsapp-card">
+        <div class="card-header"><h3>📱 Send Report via WhatsApp</h3></div>
+        <button class="btn btn-whatsapp" onclick="sendWhatsAppReport()">📲 Send Daily Report to WhatsApp</button>
+      </div>
+    </section>
+
+  </div><!-- end main-content -->
+</div><!-- end app -->
+
+<!-- ===== PRODUCT MODAL ===== -->
+<div id="productModal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeProductModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header"><h3 id="productModalTitle">Add New Product</h3><button class="modal-close" onclick="closeProductModal()">✕</button></div>
+    <form id="productForm" onsubmit="handleSaveProduct(event)">
+      <input type="hidden" id="productId" />
+      <div class="form-group"><label>Product Name *</label><input type="text" id="productName" placeholder="e.g. Ladies Tote Bag - Black" required /></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Category</label>
+          <select id="productCategory"><option value="">-- No Category --</option></select>
+        </div>
+        <div class="form-group"><label>Product Code</label><input type="text" id="productCode" placeholder="e.g. BAG-001" /></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Buying Price (KSh) *</label><input type="number" id="productBuyPrice" placeholder="0.00" min="0" step="0.01" required /></div>
+        <div class="form-group"><label>Selling Price (KSh) *</label><input type="number" id="productSellPrice" placeholder="0.00" min="0" step="0.01" required /></div>
+      </div>
+      <div class="form-grid">
+     <div class="form-group"><label>Stock Quantity *</label><input type="number" id="productStock" placeholder="0" min="0" required /></div>
+<div class="form-group"><label>Reorder Alert Level</label><input type="number" id="productReorderLevel" placeholder="3" min="0" value="3" title="Alert when stock drops to this level" /></div>
+        <div class="form-group"><label>Supplier</label>
+          <select id="productSupplier"><option value="">-- No Supplier --</option></select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeProductModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">💾 Save Product</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== CATEGORY MODAL ===== -->
+<div id="categoryModal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeCategoryModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header"><h3 id="categoryModalTitle">Add Category</h3><button class="modal-close" onclick="closeCategoryModal()">✕</button></div>
+    <form id="categoryForm" onsubmit="handleSaveCategory(event)">
+      <input type="hidden" id="categoryId" />
+      <div class="form-group"><label>Category Name *</label><input type="text" id="categoryName" placeholder="e.g. Ladies Bags" required /></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeCategoryModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">💾 Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== SUPPLIER MODAL ===== -->
+<div id="supplierModal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeSupplierModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header"><h3 id="supplierModalTitle">Add Supplier</h3><button class="modal-close" onclick="closeSupplierModal()">✕</button></div>
+    <form id="supplierForm" onsubmit="handleSaveSupplier(event)">
+      <input type="hidden" id="supplierId" />
+      <div class="form-group"><label>Supplier Name *</label><input type="text" id="supplierName" placeholder="e.g. Nairobi Bags Wholesale" required /></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Phone *</label><input type="tel" id="supplierPhone" placeholder="0712 345 678" required /></div>
+        <div class="form-group"><label>Location</label><input type="text" id="supplierLocation" placeholder="e.g. Eastleigh, Nairobi" /></div>
+      </div>
+      <div class="form-group"><label>Products Supplied</label><input type="text" id="supplierProducts" placeholder="e.g. Ladies bags, Backpacks" /></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeSupplierModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">💾 Save Supplier</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== CUSTOMER MODAL ===== -->
+<div id="customerModal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeCustomerModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header"><h3 id="customerModalTitle">Add Customer</h3><button class="modal-close" onclick="closeCustomerModal()">✕</button></div>
+    <form id="customerForm" onsubmit="handleSaveCustomer(event)">
+      <input type="hidden" id="customerId" />
+      <div class="form-group"><label>Full Name *</label><input type="text" id="customerName" placeholder="e.g. Jane Wanjiru" required /></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Phone *</label><input type="tel" id="customerPhone" placeholder="0712 345 678" required /></div>
+        <div class="form-group"><label>Location</label><input type="text" id="customerLocation" placeholder="e.g. Westlands, Nairobi" /></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeCustomerModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">💾 Save Customer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== EXPENSE MODAL ===== -->
+<div id="expenseModal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeExpenseModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header"><h3>Add Expense</h3><button class="modal-close" onclick="closeExpenseModal()">✕</button></div>
+    <form id="expenseForm" onsubmit="handleSaveExpense(event)">
+      <div class="form-group"><label>Description *</label><input type="text" id="expenseDesc" placeholder="e.g. Transport to market" required /></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Category *</label>
+          <select id="expenseCategory" required>
+            <option value="Transport">🚗 Transport</option>
+            <option value="Rent">🏠 Rent</option>
+            <option value="Utilities">💡 Utilities</option>
+            <option value="Salaries">👤 Salaries</option>
+            <option value="Stock Purchase">📦 Stock Purchase</option>
+            <option value="Marketing">📢 Marketing</option>
+            <option value="Other">📌 Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Amount (KSh) *</label><input type="number" id="expenseAmount" placeholder="0" min="0" required /></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeExpenseModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">💾 Save Expense</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== MKOPO MODAL ===== -->
+<div id="mkopoModal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeMkopoModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header"><h3 id="mkopoModalTitle">Add Debt (Mkopo)</h3><button class="modal-close" onclick="closeMkopoModal()">✕</button></div>
+    <form id="mkopoForm" onsubmit="handleSaveMkopo(event)">
+      <input type="hidden" id="mkopoId" />
+      <div class="form-group"><label>Customer Name *</label><input type="text" id="mkopoCustomer" placeholder="e.g. John Kamau" required /></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Phone *</label><input type="tel" id="mkopoPhone" placeholder="0712 345 678" required /></div>
+        <div class="form-group"><label>Amount Owed (KSh) *</label><input type="number" id="mkopoAmount" placeholder="0" min="0" required /></div>
+      </div>
+      <div class="form-group"><label>Item/Description *</label><input type="text" id="mkopoItem" placeholder="e.g. Ladies Tote Bag x2" required /></div>
+      <div class="form-group"><label>Due Date</label><input type="date" id="mkopoDue" /></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeMkopoModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">💾 Save Debt</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== RESTOCK MODAL ===== -->
+<div id="restockModal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeRestockModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header"><h3>Add Restock Entry</h3><button class="modal-close" onclick="closeRestockModal()">✕</button></div>
+    <form id="restockForm" onsubmit="handleSaveRestock(event)">
+      <div class="form-group"><label>Product *</label>
+        <select id="restockProduct" required><option value="">-- Select Product --</option></select>
+      </div>
+      <div class="form-group"><label>Supplier</label>
+        <select id="restockSupplier"><option value="">-- Select Supplier --</option></select>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Quantity Added *</label><input type="number" id="restockQty" min="1" required /></div>
+        <div class="form-group"><label>Cost Per Unit (KSh) *</label><input type="number" id="restockCost" min="0" step="0.01" required /></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeRestockModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">💾 Save Restock</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== RECEIPT MODAL ===== -->
+<div id="receiptModal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeReceiptModal()"></div>
+  <div class="modal-card receipt-modal-card">
+    <div class="modal-header"><h3>🧾 Receipt</h3><button class="modal-close" onclick="closeReceiptModal()">✕</button></div>
+    <div id="receiptContent" class="receipt"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeReceiptModal()">Close</button>
+      <button class="btn btn-whatsapp" onclick="shareReceiptWhatsApp()">📲 Share on WhatsApp</button>
+    </div>
+  </div>
+</div>
+<!-- ===== BARCODE SCANNER MODAL ===== -->
+<div id="barcodeScannerModal" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeBarcodeScanner()"></div>
+  <div class="modal-card" style="max-width:420px">
+    <div class="modal-header">
+      <h3>📷 Scan Product Barcode</h3>
+      <button class="modal-close" onclick="closeBarcodeScanner()">✕</button>
+    </div>
+    <div style="padding:1rem">
+      <video id="barcodeVideo" style="width:100%;border-radius:10px;background:#000;max-height:260px;object-fit:cover" autoplay playsinline></video>
+      <p id="barcodeStatus" style="text-align:center;margin:.75rem 0;font-size:13px;color:var(--text-muted)">Starting camera...</p>
+      <div style="border-top:1px solid var(--border);padding-top:.75rem;margin-top:.5rem">
+        <label style="font-size:13px;font-weight:600">Or enter code manually:</label>
+        <div style="display:flex;gap:8px;margin-top:.5rem">
+          <input type="text" id="barcodeManualInput" placeholder="e.g. BAG-001 or 6001234567890" style="flex:1" />
+          <button class="btn btn-primary" onclick="submitManualBarcode()">Search</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="sidebarOverlay" class="sidebar-overlay hidden" onclick="closeSidebar()"></div>
+
+
+<!-- ===================== LOCK SCREEN ===================== -->
+<div id="lockScreen" class="lock-screen hidden">
+  <div class="lock-card">
+    <div class="lock-icon">🔒</div>
+    <h2 class="lock-title">Screen Locked</h2>
+    <p class="lock-subtitle">Enter your PIN to unlock</p>
+    <div class="lock-user" id="lockUserName"></div>
+    <div class="pin-dots" id="lockPinDots">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="pin-pad">
+      <button type="button" class="pin-key" onclick="addLockPin('1')">1</button>
+      <button type="button" class="pin-key" onclick="addLockPin('2')">2</button>
+      <button type="button" class="pin-key" onclick="addLockPin('3')">3</button>
+      <button type="button" class="pin-key" onclick="addLockPin('4')">4</button>
+      <button type="button" class="pin-key" onclick="addLockPin('5')">5</button>
+      <button type="button" class="pin-key" onclick="addLockPin('6')">6</button>
+      <button type="button" class="pin-key" onclick="addLockPin('7')">7</button>
+      <button type="button" class="pin-key" onclick="addLockPin('8')">8</button>
+      <button type="button" class="pin-key" onclick="addLockPin('9')">9</button>
+      <button type="button" class="pin-key pin-key-clear" onclick="clearLockPin()">⌫</button>
+      <button type="button" class="pin-key" onclick="addLockPin('0')">0</button>
+      <button type="button" class="pin-key pin-key-back" onclick="handleLogout()">🚪</button>
+    </div>
+    <div id="lockPinError" class="pin-error hidden">❌ Wrong PIN. Try again.</div>
+    <p class="lock-logout-hint">Press 🚪 to sign out completely</p>
+  </div>
+</div>
+
+<script src="script.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+  // Show M-Pesa ref field when M-Pesa selected
+  document.addEventListener('DOMContentLoaded', () => {
+    const paymentSel = document.getElementById('salePayment');
+    if (paymentSel) {
+      paymentSel.addEventListener('change', function() {
+        const mpesaGroup = document.getElementById('mpesaRefGroup');
+        if (mpesaGroup) mpesaGroup.style.display = this.value === 'M-Pesa' ? 'block' : 'none';
+      });
+    }
+  });
+</script>
+</body>
+</html>
