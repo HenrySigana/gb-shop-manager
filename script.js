@@ -568,8 +568,10 @@ async function loadTodaySales() {
   const today = todayStr();
 
   // Reuse cached data from the Dashboard when available.
+  let usingCache = false;
   let sales = [];
   if (lastTodaySalesDate === today && Array.isArray(lastTodaySales)) {
+    usingCache = true;
     sales = lastTodaySales;
   } else {
     const { data, error } = await db.from('sales')
@@ -598,7 +600,9 @@ async function loadTodaySales() {
           <button class="btn btn-sm btn-outline" onclick="viewReceiptById('${s.id}')">View</button>
         </td>
       </tr>`).join('')
-    : '<tr><td colspan="7" class="empty-state">No sales today</td></tr>';
+    : `<tr><td colspan="7" class="empty-state">
+        No sales today (source: ${usingCache ? 'cache' : 'query'}, cachedLen: ${(Array.isArray(lastTodaySales) ? lastTodaySales.length : 0)})
+      </td></tr>`;
 }
 async function handleRecordSale(e) {
   e.preventDefault();
