@@ -33,6 +33,8 @@ let currentUser   = null;
 let currentReport = 'daily';
 let reportChart   = null;
 let lastSaleData  = null;
+let lastTodaySales = null;       // cache for today's sales (Dashboard -> Today log)
+let lastTodaySalesDate = null;  // UTC date string (from todayStr())
 
 // ---- Low Stock ----
 const LOW_STOCK_THRESHOLD = 3;
@@ -563,23 +565,26 @@ async function loadTodaySales() {
   const tbody = document.getElementById('todaySalesBody');
   if (!tbody) return;
 
-  // Keep the same filtering approach as the dashboard so it matches
-  // even if the Supabase `created_at` timezone handling differs.
   const today = todayStr();
 
-  const { data, error } = await db.from('sales')
-    .select('id, customer_id, quantity, discount, total_price, payment_method, products(name)')
-    .gte('created_at', today + 'T00:00:00')
-    .lte('created_at', today + 'T23:59:59')
-    .order('created_at', { ascending: false });
+  // Reuse cached data from the Dashboard when available.
+  let sales = [];
+  if (lastTodaySalesDate === today && Array.isArray(lastTodaySales)) {
+    sales = lastTodaySales;
+  } else {
+    const { data, error } = await db.from('sales')
+      .select('id, customer_id, quantity, discount, total_price, payment_method, products(name)')
+      .gte('created_at', today + 'T00:00:00')
+      .lte('created_at', today + 'T23:59:59')
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('[loadTodaySales] Supabase error:', error);
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Error loading sales</td></tr>';
-    return;
+    if (error) {
+      console.error('[loadTodaySales] Supabase error:', error);
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Error loading sales</td></tr>';
+      return;
+    }
+    sales = data || [];
   }
-
-  const sales = data || [];
 
   tbody.innerHTML = sales.length
     ? sales.map(s => `<tr>
@@ -981,6 +986,10 @@ async function loadDashboard() {
   const { data: sales } = await db.from('sales').select('*, products(name)')
     .gte('created_at', today + 'T00:00:00').lte('created_at', today + 'T23:59:59')
     .order('created_at', { ascending: false });
+
+  // Cache "today's sales" so the Record Sale tab uses the same dataset.
+  lastTodaySales = sales || [];
+  lastTodaySalesDate = today;
 
   const totalSales  = (sales||[]).reduce((s,r) => s + r.total_price, 0);
   const totalProfit = (sales||[]).reduce((s,r) => s + r.profit, 0);
