@@ -3,7 +3,7 @@
 // Enables PWA installation and offline support
 // ============================================================
 
-const CACHE_NAME = 'gb-shop-v1';
+const CACHE_NAME = 'gb-shop-v2';
 
 // Files to cache for offline use
 const ASSETS = [

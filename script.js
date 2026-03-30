@@ -563,12 +563,16 @@ async function loadTodaySales() {
   const tbody = document.getElementById('todaySalesBody');
   if (!tbody) return;
 
-  const today = todayStr();
+  // Use local day boundaries, but query with UTC timestamps.
+  // `todayStr()` is UTC-based; converting here prevents "today" being off by timezone.
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
   const { data } = await db.from('sales')
     .select('id, quantity, discount, total_price, payment_method, customers(name), products(name)')
-    .gte('created_at', today + 'T00:00:00')
-    .lte('created_at', today + 'T23:59:59')
+    .gte('created_at', start.toISOString())
+    .lte('created_at', end.toISOString())
     .order('created_at', { ascending: false });
 
   const sales = data || [];
