@@ -563,24 +563,28 @@ async function loadTodaySales() {
   const tbody = document.getElementById('todaySalesBody');
   if (!tbody) return;
 
-  // Use local day boundaries, but query with UTC timestamps.
-  // `todayStr()` is UTC-based; converting here prevents "today" being off by timezone.
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  // Keep the same filtering approach as the dashboard so it matches
+  // even if the Supabase `created_at` timezone handling differs.
+  const today = todayStr();
 
-  const { data } = await db.from('sales')
-    .select('id, quantity, discount, total_price, payment_method, customers(name), products(name)')
-    .gte('created_at', start.toISOString())
-    .lte('created_at', end.toISOString())
+  const { data, error } = await db.from('sales')
+    .select('id, customer_id, quantity, discount, total_price, payment_method, products(name)')
+    .gte('created_at', today + 'T00:00:00')
+    .lte('created_at', today + 'T23:59:59')
     .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[loadTodaySales] Supabase error:', error);
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Error loading sales</td></tr>';
+    return;
+  }
 
   const sales = data || [];
 
   tbody.innerHTML = sales.length
     ? sales.map(s => `<tr>
         <td>${escHtml(s.products?.name || '?')}</td>
-        <td>${escHtml(s.customers?.name || 'Walk-in')}</td>
+        <td>${escHtml(allCustomers.find(c => c.id === s.customer_id)?.name || 'Walk-in')}</td>
         <td class="mono">${s.quantity}</td>
         <td class="mono">${s.discount > 0 ? 'KSh ' + fmt(s.discount) : '—'}</td>
         <td class="mono">KSh ${fmt(s.total_price)}</td>
